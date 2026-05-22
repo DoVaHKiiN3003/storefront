@@ -4,8 +4,8 @@ import {
   createContext,
   useContext,
   useEffect,
-  useCallback,
   useRef,
+  useMemo,
   Suspense,
   type ReactNode,
 } from "react";
@@ -15,25 +15,7 @@ import { analyticsStore } from "./analyticsStore";
 
 // ── Types ──────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type GTagParams = Record<string, any>;
-
-type GTagEvent = {
-  name: string;
-  params?: GTagParams;
-};
-
-interface ItemData {
-  item_id: string | number;
-  item_name: string;
-  item_category?: string;
-  price?: number;
-  quantity?: number;
-  item_variant?: string;
-}
-
 interface AnalyticsContextValue {
-  trackEvent: (name: string, params?: Record<string, unknown>) => void;
   trackViewItem: (product: Product, variant?: string) => void;
   trackAddToCart: (product: Product, quantity: number, variant?: string, price?: number) => void;
   trackRemoveFromCart: (item: CartItem) => void;
@@ -54,37 +36,7 @@ interface AnalyticsContextValue {
 
 const AnalyticsContext = createContext<AnalyticsContextValue | null>(null);
 
-// ── GA4 Script Injection ─────────────────────────────
-
-function useGtagScript() {
-  useEffect(() => {
-    const measurementId = (process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? "").trim();
-
-    if (!measurementId || typeof window === "undefined") return;
-
-    // Prevent double injection
-    if (document.querySelector(`script[src*="${measurementId}"]`)) return;
-
-    // Inline gtag snippet (before the main script)
-    const inline = document.createElement("script");
-    inline.textContent = `
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', '${measurementId}', {
-        send_page_view: false,
-        cookie_flags: 'max-age=63072000;secure;samesite=none',
-      });
-    `;
-    document.head.appendChild(inline);
-
-    // Load the gtag.js script
-    const script = document.createElement("script");
-    script.src = `https://www.googletagmanager.com/gtag/js?id=${measurementId}`;
-    script.async = true;
-    document.head.appendChild(script);
-  }, []);
-}  // ── Page view tracker (isolated — this is the only part needing useSearchParams) ─
+// ── Page view tracker ─────────────────────────────────
 
 function PageViewTracker() {
   const pathname = usePathname();
@@ -101,243 +53,152 @@ function PageViewTracker() {
 
     // Store locally for admin dashboard
     analyticsStore.trackPageView(url, document.title);
-
-    const measurementId = (process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? "").trim();
-    if (!measurementId) return;
-
-    try {
-      // @ts-expect-error — gtag is injected at runtime
-      if (typeof window.gtag === "function") {
-        // @ts-expect-error
-        window.gtag("config", measurementId, {
-          page_path: url,
-          page_title: document.title,
-        });
-      }
-    } catch {
-      // Silently fail
-    }
   }, [pathname, searchParams]);
 
   return null;
 }
 
-// ── Provider (no useSearchParams dependency — context always available) ─
+// ── Provider ──────────────────────────────────────────
 
 export function AnalyticsProvider({ children }: { children: ReactNode }) {
-  // Inject GA4 gtag script once
-  useGtagScript();
+  const value: AnalyticsContextValue = useMemo(() => ({
+    // ── E-commerce event helpers ──────────────────────
 
-  const gtag = useCallback((event: GTagEvent) => {
-    // Store locally for admin dashboard
-    analyticsStore.trackEvent(event.name, (event.params ?? {}) as Record<string, unknown>);
-
-    if (typeof window === "undefined") return;
-    const measurementId = (process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? "").trim();
-    if (!measurementId) return;
-
-    try {
-      // @ts-expect-error — gtag is injected at runtime
-      if (typeof window.gtag === "function") {
-        // @ts-expect-error
-        window.gtag("event", event.name, event.params);
-      }
-    } catch {
-      // Silently fail
-    }
-  }, []);
-
-  const trackEvent = useCallback(
-    (name: string, params?: Record<string, unknown>) => {
-      gtag({ name, params: params as GTagParams });
-    },
-    [gtag]
-  );
-
-  // ── Item converters ──────────────────────────────
-
-  const itemToGA4 = useCallback(
-    (
-      product: Product,
-      quantity?: number,
-      variant?: string,
-      price?: number
-    ): ItemData => ({
-      item_id: product.id,
-      item_name: product.name,
-      item_category: product.category,
-      price: price ?? product.price,
-      quantity: quantity ?? 1,
-      item_variant: variant,
-    }),
-    []
-  );
-
-  const cartItemToGA4 = useCallback(
-    (item: CartItem): ItemData => ({
-      item_id: item.id,
-      item_name: item.name,
-      price: item.price,
-      quantity: item.quantity,
-      item_variant: item.variant,
-    }),
-    []
-  );
-
-  // ── E-commerce event helpers ──────────────────────
-
-  const trackViewItem = useCallback(
-    (product: Product, variant?: string) => {
-      gtag({
-        name: "view_item",
-        params: {
-          currency: "USD",
-          value: variant
-            ? product.price +
-              (product.variants?.find((v) => v.label === variant)?.priceDelta ?? 0)
-            : product.price,
-          items: [itemToGA4(product, 1, variant)],
-        },
+    trackViewItem(product: Product, variant?: string) {
+      analyticsStore.trackEvent("view_item", {
+        currency: "USD",
+        value: variant
+          ? product.price +
+            (product.variants?.find((v) => v.label === variant)?.priceDelta ?? 0)
+          : product.price,
+        items: [
+          {
+            item_id: product.id,
+            item_name: product.name,
+            item_category: product.category,
+            price: product.price,
+            quantity: 1,
+            item_variant: variant,
+          },
+        ],
       });
     },
-    [gtag, itemToGA4]
-  );
 
-  const trackAddToCart = useCallback(
-    (product: Product, quantity: number, variant?: string, price?: number) => {
-      gtag({
-        name: "add_to_cart",
-        params: {
-          currency: "USD",
-          value: (price ?? product.price) * quantity,
-          items: [itemToGA4(product, quantity, variant, price)],
-        },
+    trackAddToCart(product: Product, quantity: number, variant?: string, price?: number) {
+      analyticsStore.trackEvent("add_to_cart", {
+        currency: "USD",
+        value: (price ?? product.price) * quantity,
+        items: [
+          {
+            item_id: product.id,
+            item_name: product.name,
+            item_category: product.category,
+            price: price ?? product.price,
+            quantity,
+            item_variant: variant,
+          },
+        ],
       });
     },
-    [gtag, itemToGA4]
-  );
 
-  const trackRemoveFromCart = useCallback(
-    (item: CartItem) => {
-      gtag({
-        name: "remove_from_cart",
-        params: {
-          currency: "USD",
-          value: item.price * item.quantity,
-          items: [cartItemToGA4(item)],
-        },
+    trackRemoveFromCart(item: CartItem) {
+      analyticsStore.trackEvent("remove_from_cart", {
+        currency: "USD",
+        value: item.price * item.quantity,
+        items: [
+          {
+            item_id: item.id,
+            item_name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+            item_variant: item.variant,
+          },
+        ],
       });
     },
-    [gtag, cartItemToGA4]
-  );
 
-  const trackBeginCheckout = useCallback(
-    (items: CartItem[], subtotal: number) => {
-      gtag({
-        name: "begin_checkout",
-        params: {
-          currency: "USD",
-          value: subtotal,
-          items: items.map(cartItemToGA4),
-        },
+    trackBeginCheckout(items: CartItem[], subtotal: number) {
+      analyticsStore.trackEvent("begin_checkout", {
+        currency: "USD",
+        value: subtotal,
+        items: items.map((item) => ({
+          item_id: item.id,
+          item_name: item.name,
+          price: item.price,
+          quantity: item.quantity,
+          item_variant: item.variant,
+        })),
       });
     },
-    [gtag, cartItemToGA4]
-  );
 
-  const trackAddShippingInfo = useCallback(
-    (value: number, coupon?: string) => {
-      gtag({
-        name: "add_shipping_info",
-        params: {
-          currency: "USD",
-          value,
-          coupon: coupon ?? undefined,
-          shipping_tier: "standard",
-        },
+    trackAddShippingInfo(value: number, coupon?: string) {
+      analyticsStore.trackEvent("add_shipping_info", {
+        currency: "USD",
+        value,
+        coupon: coupon ?? undefined,
+        shipping_tier: "standard",
       });
     },
-    [gtag]
-  );
 
-  const trackAddPaymentInfo = useCallback(
-    (value: number, coupon?: string) => {
-      gtag({
-        name: "add_payment_info",
-        params: {
-          currency: "USD",
-          value,
-          coupon: coupon ?? undefined,
-          payment_type: "credit_card",
-        },
+    trackAddPaymentInfo(value: number, coupon?: string) {
+      analyticsStore.trackEvent("add_payment_info", {
+        currency: "USD",
+        value,
+        coupon: coupon ?? undefined,
+        payment_type: "credit_card",
       });
     },
-    [gtag]
-  );
 
-  const trackPurchase = useCallback(
-    (
+    trackPurchase(
       transactionId: string,
       value: number,
       items: CartItem[],
       coupon?: string,
       shipping?: number,
       tax?: number
-    ) => {
-      gtag({
-        name: "purchase",
-        params: {
-          transaction_id: transactionId,
-          currency: "USD",
-          value,
-          coupon: coupon ?? undefined,
-          shipping: shipping ?? 0,
-          tax: tax ?? 0,
-          items: items.map(cartItemToGA4),
-        },
+    ) {
+      analyticsStore.trackEvent("purchase", {
+        transaction_id: transactionId,
+        currency: "USD",
+        value,
+        coupon: coupon ?? undefined,
+        shipping: shipping ?? 0,
+        tax: tax ?? 0,
+        items: items.map((item) => ({
+          item_id: item.id,
+          item_name: item.name,
+          price: item.price,
+          quantity: item.quantity,
+          item_variant: item.variant,
+        })),
       });
     },
-    [gtag, cartItemToGA4]
-  );
 
-  const trackWishlistToggle = useCallback(
-    (product: Product, action: "add" | "remove") => {
-      gtag({
-        name: action === "add" ? "add_to_wishlist" : "remove_from_wishlist",
-        params: {
+    trackWishlistToggle(product: Product, action: "add" | "remove") {
+      analyticsStore.trackEvent(
+        action === "add" ? "add_to_wishlist" : "remove_from_wishlist",
+        {
           currency: "USD",
           value: product.price,
-          items: [itemToGA4(product)],
-        },
+          items: [
+            {
+              item_id: product.id,
+              item_name: product.name,
+              item_category: product.category,
+              price: product.price,
+              quantity: 1,
+            },
+          ],
+        }
+      );
+    },
+
+    trackSearch(query: string) {
+      analyticsStore.trackEvent("search", {
+        search_term: query,
       });
     },
-    [gtag, itemToGA4]
-  );
-
-  const trackSearch = useCallback(
-    (query: string) => {
-      gtag({
-        name: "search",
-        params: {
-          search_term: query,
-        },
-      });
-    },
-    [gtag]
-  );
-
-  const value: AnalyticsContextValue = {
-    trackEvent,
-    trackViewItem,
-    trackAddToCart,
-    trackRemoveFromCart,
-    trackBeginCheckout,
-    trackAddShippingInfo,
-    trackAddPaymentInfo,
-    trackPurchase,
-    trackWishlistToggle,
-    trackSearch,
-  };
+  }), []);
 
   return (
     <AnalyticsContext.Provider value={value}>
