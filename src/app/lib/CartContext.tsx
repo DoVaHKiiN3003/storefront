@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import type { CartItem, Product } from "./types";
+import { useAnalytics } from "./AnalyticsContext";
 
 // ── State & Actions ──────────────────────────────────────
 
@@ -154,19 +155,29 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, [state.items, hydrated]);
 
+  const { trackAddToCart, trackRemoveFromCart } = useAnalytics();
+
   const addItem = useCallback(
     (product: Product, quantity = 1, variant?: string, price?: number) => {
       dispatch({
         type: "ADD_ITEM",
         payload: { product, quantity, variant, price },
       });
+      trackAddToCart(product, quantity, variant, price);
     },
-    []
+    [trackAddToCart]
   );
 
   const removeItem = useCallback((id: number, variant?: string) => {
+    // Find item before removing so we have its data for analytics
+    const item = state.items.find(
+      (i) => (variant ? `${i.id}-${i.variant}` : `${i.id}`) === (variant ? `${id}-${variant}` : `${id}`)
+    );
     dispatch({ type: "REMOVE_ITEM", payload: { id, variant } });
-  }, []);
+    if (item) {
+      trackRemoveFromCart(item);
+    }
+  }, [state.items, trackRemoveFromCart]);
 
   const updateQuantity = useCallback(
     (id: number, quantity: number, variant?: string) => {

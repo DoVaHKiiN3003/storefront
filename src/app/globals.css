@@ -112,3 +112,31 @@ html *::after {
 .animate-heart-bounce {
   animation: heartBounce 0.5s cubic-bezier(0.32, 0.72, 0, 1);
 }
+
+/* ── Skeleton Shimmer ────────────────────────── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    110deg,
+    rgba(60, 47, 42, 0.06) 30%,
+    rgba(60, 47, 42, 0.12) 50%,
+    rgba(60, 47, 42, 0.06) 70%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+html.dark .skeleton {
+  background: linear-gradient(
+    110deg,
+    rgba(240, 236, 228, 0.04) 30%,
+    rgba(240, 236, 228, 0.1) 50%,
+    rgba(240, 236, 228, 0.04) 70%
+  );
+  background-size: 200% 100%;
+}

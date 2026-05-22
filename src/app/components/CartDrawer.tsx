@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { X, Minus, Plus, Trash2, ShoppingBag, ArrowRight } from "lucide-react";
 import { useCart } from "../lib/CartContext";
+import { useCurrency } from "../lib/CurrencyContext";
 import { useRouter } from "next/navigation";
 
 export default function CartDrawer() {
@@ -15,6 +16,7 @@ export default function CartDrawer() {
     updateQuantity,
     removeItem,
   } = useCart();
+  const { formatPrice } = useCurrency();
   const router = useRouter();
   // Lock body scroll when open
   useEffect(() => {
@@ -121,7 +123,7 @@ export default function CartDrawer() {
                         {item.name}
                       </h4>
                       <p className="text-xs text-espresso-muted/70 mt-0.5">
-                        ${item.price.toFixed(2)}
+                        {formatPrice(item.price)}
                       </p>
                     </div>
                     <button
@@ -156,7 +158,7 @@ export default function CartDrawer() {
                       <Plus size={12} className="text-espresso" />
                     </button>
                     <span className="ml-auto text-sm font-semibold text-espresso tabular-nums">
-                      ${(item.price * item.quantity).toFixed(2)}
+                      {formatPrice(item.price * item.quantity)}
                     </span>
                   </div>
                 </div>
@@ -171,7 +173,7 @@ export default function CartDrawer() {
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-espresso-muted">Subtotal</span>
               <span className="text-lg font-semibold tracking-tight text-espresso tabular-nums">
-                ${subtotal.toFixed(2)}
+                {formatPrice(subtotal)}
               </span>
             </div>
             <p className="text-[11px] text-espresso-muted/50">

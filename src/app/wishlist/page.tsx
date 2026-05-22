@@ -1,13 +1,17 @@
 "use client";
 
-import { Heart, Trash2, ShoppingBag, ArrowRight } from "lucide-react";
+import { Heart, Trash2, ShoppingBag, ArrowRight, Eye } from "lucide-react";
 import Link from "next/link";
 import { useWishlist } from "../lib/WishlistContext";
-import { products } from "../lib/products";
+import { useQuickView } from "../lib/QuickViewContext";
+import { useProducts } from "../lib/useProducts";
+import type { Product } from "../lib/types";
 import AnimateOnView from "../components/AnimateOnView";
+import { useCurrency } from "../lib/CurrencyContext";
 
 export default function WishlistPage() {
   const { ids, count, clearWishlist } = useWishlist();
+  const { products } = useProducts();
 
   // Get full product data for wishlist IDs
   const wishlistProducts = products.filter((p) => ids.has(p.id));
@@ -65,8 +69,10 @@ export default function WishlistPage() {
 
 // ── Wishlist Card ────────────────────────────────────────
 
-function WishlistCard({ product }: { product: (typeof products)[number] }) {
+function WishlistCard({ product }: { product: Product }) {
   const { isInWishlist, toggleWishlist } = useWishlist();
+  const { openQuickView } = useQuickView();
+  const { formatPrice } = useCurrency();
   const isFav = isInWishlist(product.id);
 
   return (
@@ -85,10 +91,25 @@ function WishlistCard({ product }: { product: (typeof products)[number] }) {
         </div>
       </Link>
 
-      {/* Remove button — top-right */}
-      <div className="absolute top-4 right-4 z-10 opacity-0 group-hover:opacity-100 transition-all duration-300">
+      {/* Top-right actions */}
+      <div className="absolute top-4 right-4 z-10 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-300">
         <button
-          onClick={() => toggleWishlist(product.id)}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openQuickView(product);
+          }}
+          className="w-9 h-9 rounded-full backdrop-blur-sm flex items-center justify-center transition-all duration-300 bg-white/80 hover:bg-white text-espresso-muted hover:text-espresso"
+          aria-label="Quick view"
+        >
+          <Eye size={14} strokeWidth={1.5} />
+        </button>
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleWishlist(product.id);
+          }}
           className={`w-9 h-9 rounded-full backdrop-blur-sm flex items-center justify-center transition-all duration-300 ${
             isFav
               ? "bg-red-50/90 text-red-400"
@@ -113,7 +134,7 @@ function WishlistCard({ product }: { product: (typeof products)[number] }) {
             {product.name}
           </Link>
           <p className="text-xs text-espresso-muted/60 mt-1">
-            {product.priceLabel}
+            {formatPrice(product.price)}
           </p>
         </div>
         <button

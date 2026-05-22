@@ -1,5 +1,6 @@
 import Hero from "./components/Hero";
 import FeaturedProducts from "./components/FeaturedProducts";
+import RecentlyViewed from "./components/RecentlyViewed";
 import Categories from "./components/Categories";
 import Testimonials from "./components/Testimonials";
 import Newsletter from "./components/Newsletter";
@@ -10,6 +11,7 @@ export default function Home() {
     <>
       <Hero />
       <FeaturedProducts />
+      <RecentlyViewed />
       <Categories />
       <Testimonials />
       <Newsletter />

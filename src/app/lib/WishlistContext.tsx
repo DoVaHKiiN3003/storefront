@@ -8,6 +8,8 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
+import { useAnalytics } from "./AnalyticsContext";
+import { products } from "./products";
 
 // ── Context ──────────────────────────────────────────────
 
@@ -63,17 +65,23 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
     [ids]
   );
 
+  const { trackWishlistToggle } = useAnalytics();
+
   const toggleWishlist = useCallback((id: number) => {
     setIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
+        const product = products.find((p) => p.id === id);
+        if (product) trackWishlistToggle(product, "remove");
       } else {
         next.add(id);
+        const product = products.find((p) => p.id === id);
+        if (product) trackWishlistToggle(product, "add");
       }
       return next;
     });
-  }, []);
+  }, [trackWishlistToggle]);
 
   const addToWishlist = useCallback((id: number) => {
     setIds((prev) => {

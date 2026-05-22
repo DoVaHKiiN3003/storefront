@@ -8,6 +8,10 @@ import { WishlistProvider } from "./lib/WishlistContext";
 import { ThemeProvider } from "./lib/ThemeContext";
 import { ReviewProvider } from "./lib/ReviewContext";
 import { ToastProvider } from "./lib/ToastContext";
+import { AnalyticsProvider } from "./lib/AnalyticsContext";
+import { QuickViewProvider } from "./lib/QuickViewContext";
+import { CurrencyProvider } from "./lib/CurrencyContext";
+import QuickViewModal from "./components/QuickViewModal";
 import ScrollToTop from "./components/ScrollToTop";
 
 const geistSans = Geist({
@@ -42,18 +46,24 @@ export default function RootLayout({
       </head>
       <body className="font-sans antialiased bg-cream text-espresso">
         <ThemeProvider>
-          <WishlistProvider>
-            <ReviewProvider>
-              <CartProvider>
-                <ToastProvider>
-                  <Nav />
-                  <main>{children}</main>
-                  <CartDrawer />
-                  <ScrollToTop />
-                </ToastProvider>
-              </CartProvider>
-            </ReviewProvider>
-          </WishlistProvider>
+          <AnalyticsProvider>
+            <WishlistProvider>
+              <ReviewProvider>
+                <QuickViewProvider>                    <CurrencyProvider>
+                      <CartProvider>
+                      <ToastProvider>
+                      <Nav />
+                      <main>{children}</main>
+                      <CartDrawer />
+                      <QuickViewModal />
+                      <ScrollToTop />
+                    </ToastProvider>
+                  </CartProvider>
+                    </CurrencyProvider>
+                </QuickViewProvider>
+              </ReviewProvider>
+            </WishlistProvider>
+          </AnalyticsProvider>
         </ThemeProvider>
       </body>
     </html>

@@ -15,10 +15,12 @@ import {
 import Link from "next/link";
 import { useCart } from "../../lib/CartContext";
 import { useWishlist } from "../../lib/WishlistContext";
-import { getProductBySlug, getRelatedProducts, products } from "../../lib/products";
+import { useAnalytics } from "../../lib/AnalyticsContext";
+import { useProduct, useProducts, getRelatedProducts } from "../../lib/useProducts";
+import { useCurrency } from "../../lib/CurrencyContext";
 import AnimateOnView from "../../components/AnimateOnView";
 import ReviewsSection from "../../components/ReviewsSection";
-import { trackProductView } from "../../components/RecentlyViewed";
+import RecentlyViewed, { trackProductView } from "../../components/RecentlyViewed";
 import type { Product } from "../../lib/types";
 
 export default function ProductPage({
@@ -28,7 +30,8 @@ export default function ProductPage({
 }) {
   const { slug } = use(params);
   const router = useRouter();
-  const product = getProductBySlug(slug);
+  const { product } = useProduct(slug);
+  const { formatPrice } = useCurrency();
 
   if (!product) {
     return (
@@ -54,9 +57,21 @@ export default function ProductPage({
     );
   }
 
+  const { trackViewItem } = useAnalytics();
+
+  const { products } = useProducts();
+
   // Track recently viewed
   useEffect(() => {
     trackProductView(slug);
+  }, [slug]);
+
+  // Track product view for analytics
+  useEffect(() => {
+    if (product) {
+      trackViewItem(product, selectedVariant ?? product.variants?.[0].label);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
   // Shared variant state — lifted up so price display and ProductActions stay in sync
@@ -96,7 +111,7 @@ export default function ProductPage({
           <ImageGallery product={product} />
           {/* Recently Viewed section below gallery on desktop */}
           <div className="mt-8 hidden lg:block">
-            <RecentlyViewedSidebar currentSlug={slug} />
+            <RecentlyViewed currentSlug={slug} />
           </div>
         </AnimateOnView>
 
@@ -117,19 +132,11 @@ export default function ProductPage({
               {/* Price */}
               <div className="flex items-baseline gap-3">
                 <span className="text-3xl font-semibold tracking-tight text-espresso tabular-nums">
-                  ${currentPrice.toFixed(0)}
+                  {formatPrice(currentPrice, { decimals: 0 })}
                 </span>
-                {variant?.priceDelta ? (
-                  <span className="text-xs text-espresso-muted/50 line-through">
-                    ${product.priceLabel.replace("$", "")}
-                  </span>
-                ) : (
-                  <span className="text-xs text-espresso-muted/50 line-through">
-                    {product.priceLabel === "$450"
-                      ? "$520"
-                      : `$${(product.price * 1.15).toFixed(0)}`}
-                  </span>
-                )}
+                <span className="text-xs text-espresso-muted/50 line-through">
+                  {formatPrice(product.price * 1.15, { decimals: 0 })}
+                </span>
               </div>
 
               {/* Description */}
@@ -288,6 +295,7 @@ function VariantSelectors({
   selected: string | null;
   onSelect: (label: string | null) => void;
 }) {
+  const { formatPrice } = useCurrency();
   // Group by type
   const sizes = variants.filter((v) => v.type === "size");
   const colors = variants.filter((v) => v.type === "color");
@@ -317,12 +325,11 @@ function VariantSelectors({
                     : "bg-white text-espresso-muted border border-espresso/10 hover:border-espresso/20 hover:text-espresso"
                 }`}
               >
-                {v.label}
-                {v.priceDelta > 0 && (
-                  <span className="ml-1.5 text-[10px] opacity-70">
-                    +${v.priceDelta}
-                  </span>
-                )}
+                {v.label}                    {v.priceDelta > 0 && (
+                      <span className="ml-1.5 text-[10px] opacity-70">
+                        +{formatPrice(v.priceDelta, { decimals: 0 })}
+                      </span>
+                    )}
               </button>
             ))}
           </div>
@@ -361,12 +368,11 @@ function VariantSelectors({
                       : "ring-1 ring-espresso/10 hover:ring-espresso/30"
                   }`}
                   style={{ backgroundColor: v.color || "#ccc" }}
-                />
-                <span className="text-[9px] text-espresso-muted/50 font-medium whitespace-nowrap">
-                  {v.priceDelta > 0 && (
-                    <span className="text-sage">+${v.priceDelta}</span>
-                  )}
-                </span>
+                />                    <span className="text-[9px] text-espresso-muted/50 font-medium whitespace-nowrap">
+                      {v.priceDelta > 0 && (
+                        <span className="text-sage">+{formatPrice(v.priceDelta, { decimals: 0 })}</span>
+                      )}
+                    </span>
               </button>
             ))}
           </div>
@@ -391,6 +397,7 @@ function ProductActions({
 }) {
   const { addItem, items, setCartOpen } = useCart();
   const { isInWishlist, toggleWishlist } = useWishlist();
+  const { formatPrice } = useCurrency();
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
   const isFav = isInWishlist(product.id);
@@ -504,7 +511,7 @@ function ProductActions({
             ) : (
               <>
                 <ShoppingBag size={16} strokeWidth={2} />
-                Add to Cart — ${currentPrice.toFixed(0)}
+                Add to Cart — {formatPrice(currentPrice, { decimals: 0 })}
               </>
             )}
           </span>
@@ -558,61 +565,12 @@ function TrustItem({
 
 // ── Related Products ─────────────────────────────────────
 
-// ── Recently Viewed Sidebar ─────────────────────────────
-
-function RecentlyViewedSidebar({ currentSlug }: { currentSlug: string }) {
-  const [recent, setRecent] = useState<{ slug: string; name: string; image: string; price: string }[]>([]);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("storefront-recently-viewed");
-      if (stored) {
-        const slugs: string[] = JSON.parse(stored);
-        const filtered = slugs.filter((s) => s !== currentSlug).slice(0, 3);
-        const resolved = filtered
-          .map((slug) => products.find((p) => p.slug === slug))
-          .filter((p): p is Product => !!p)
-          .map((p) => ({ slug: p.slug, name: p.name, image: p.image, price: p.priceLabel }));
-        setRecent(resolved);
-      }
-    } catch { /* ignore */ }
-  }, [currentSlug]);
-
-  if (recent.length === 0) return null;
-
-  return (
-    <div>
-      <h3 className="text-[10px] uppercase tracking-[0.2em] font-semibold text-espresso-muted/50 mb-3">
-        Recently Viewed
-      </h3>
-      <div className="space-y-2.5">
-        {recent.map((item) => (
-          <Link
-            key={item.slug}
-            href={`/products/${item.slug}`}
-            className="group flex items-center gap-3 rounded-xl p-2 hover:bg-espresso/5 transition-all duration-300"
-          >
-            <div className="w-10 h-12 rounded-lg overflow-hidden bg-espresso/5 shrink-0">
-              <img src={item.image} alt={item.name} className="w-full h-full object-cover" loading="lazy" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-medium text-espresso truncate group-hover:text-espresso-muted transition-colors duration-300">
-                {item.name}
-              </p>
-              <p className="text-[10px] text-espresso-muted/60 font-medium">{item.price}</p>
-            </div>
-          </Link>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ── Related Products ─────────────────────────────────────
 
 function RelatedProducts({ currentSlug }: { currentSlug: string }) {
-  const current = getProductBySlug(currentSlug);
-  const related = getRelatedProducts(currentSlug, 3);
+  const { product: current } = useProduct(currentSlug);
+  const { products } = useProducts();
+  const related = getRelatedProducts(products, currentSlug, 3);
 
   if (related.length === 0) {
     // Fallback: show other products from different categories
@@ -633,6 +591,7 @@ function RelatedGrid({
   products: Product[];
   title: string;
 }) {
+  const { formatPrice } = useCurrency();
   return (
     <section className="mt-28 sm:mt-40">
       <AnimateOnView delay={0} rootMargin="-80px">
@@ -679,7 +638,7 @@ function RelatedGrid({
                   </h3>
                 </div>
                 <span className="text-sm font-medium text-espresso tabular-nums">
-                  {product.priceLabel}
+                  {formatPrice(product.price)}
                 </span>
               </div>
             </Link>

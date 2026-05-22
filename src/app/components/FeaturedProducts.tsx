@@ -1,12 +1,14 @@
 "use client";
 
 import { useRef } from "react";
-import { ArrowRight, Plus, Check } from "lucide-react";
+import { ArrowRight, Plus, Check, Eye } from "lucide-react";
 import Link from "next/link";
 import AnimateOnView, { useOnView } from "./AnimateOnView";
 import { useCart } from "../lib/CartContext";
 import { useWishlist } from "../lib/WishlistContext";
-import { products } from "../lib/products";
+import { useQuickView } from "../lib/QuickViewContext";
+import { useProducts } from "../lib/useProducts";
+import { useCurrency } from "../lib/CurrencyContext";
 import type { Product } from "../lib/types";
 
 const productSpans: Record<number, string> = {
@@ -18,6 +20,8 @@ const productSpans: Record<number, string> = {
 };
 
 export default function FeaturedProducts() {
+  const { products } = useProducts();
+  const { formatPrice } = useCurrency();
   const headerRef = useRef<HTMLDivElement>(null);
   const headerVisible = useOnView(headerRef, "-100px");
 
@@ -74,6 +78,7 @@ export default function FeaturedProducts() {
 
               {/* Top-right actions */}
               <div className="absolute top-4 right-4 z-10 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                <QuickViewButton product={product} />
                 <WishlistOverlayIcon productId={product.id} />
                 <AddToCartButton product={product} />
               </div>
@@ -88,7 +93,7 @@ export default function FeaturedProducts() {
                     {product.name}
                   </h3>
                   <span className="text-sm font-medium text-cream/80">
-                    {product.priceLabel}
+                    {formatPrice(product.price)}
                   </span>
                 </div>
               </div>
@@ -99,7 +104,6 @@ export default function FeaturedProducts() {
     </section>
   );
 }
-
 function WishlistOverlayIcon({ productId }: { productId: number }) {
   const { isInWishlist, toggleWishlist } = useWishlist();
   const isFav = isInWishlist(productId);
@@ -135,6 +139,24 @@ function WishlistOverlayIcon({ productId }: { productId: number }) {
           />
         </svg>
       </span>
+    </button>
+  );
+}
+
+function QuickViewButton({ product }: { product: Product }) {
+  const { openQuickView } = useQuickView();
+
+  return (
+    <button
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openQuickView(product);
+      }}
+      className="w-9 h-9 rounded-full backdrop-blur-sm flex items-center justify-center transition-all duration-300 bg-white/80 hover:bg-white text-espresso-muted hover:text-espresso"
+      aria-label="Quick view"
+    >
+      <Eye size={14} strokeWidth={1.5} />
     </button>
   );
 }

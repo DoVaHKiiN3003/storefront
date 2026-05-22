@@ -9,10 +9,16 @@ import {
   SlidersHorizontal,
   ArrowUpDown,
   ArrowRight,
+  Eye,
 } from "lucide-react";
-import { products } from "../lib/products";
+import { useProducts } from "../lib/useProducts";
 import { useWishlist } from "../lib/WishlistContext";
+import { useAnalytics } from "../lib/AnalyticsContext";
+import { useQuickView } from "../lib/QuickViewContext";
+import { useCurrency } from "../lib/CurrencyContext";
 import AnimateOnView from "../components/AnimateOnView";
+import RecentlyViewed from "../components/RecentlyViewed";
+import { SearchPageSkeleton } from "../components/Skeleton";
 import type { Product } from "../lib/types";
 
 const categories = ["All", "Objects", "Bags", "Dining", "Textiles", "Lighting"];
@@ -35,14 +41,7 @@ const sortOptions = [
 export default function SearchPageWrapper() {
   return (
     <Suspense
-      fallback={
-        <div className="pt-36 pb-32 px-6 sm:px-12 lg:px-20 xl:px-28 max-w-7xl mx-auto">
-          <div className="max-w-2xl mx-auto text-center">
-            <div className="w-16 h-16 rounded-full bg-sage/10 mx-auto mb-6 animate-pulse" />
-            <div className="h-8 w-48 bg-espresso/5 rounded-full mx-auto animate-pulse" />
-          </div>
-        </div>
-      }
+      fallback={<SearchPageSkeleton />}
     >
       <SearchPage />
     </Suspense>
@@ -74,7 +73,10 @@ function SearchPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [showSort, setShowSort] = useState(false);
   const [sortBy, setSortBy] = useState("relevance");
+  const [searchTracked, setSearchTracked] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { trackSearch } = useAnalytics();
+  const { products } = useProducts();
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -129,8 +131,21 @@ function SearchPage() {
     return result;
   }, [query, selectedCategory, priceRange, sortBy]);
 
+  // Track search on actual query submission or when results change
+  useEffect(() => {
+    if (query && !searchTracked) {
+      trackSearch(query);
+      setSearchTracked(true);
+    } else if (!query) {
+      setSearchTracked(false);
+    }
+  }, [query, searchTracked, trackSearch]);
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+    if (query) {
+      trackSearch(query);
+    }
     const params = new URLSearchParams();
     if (query) params.set("q", query);
     if (selectedCategory !== "All") params.set("category", selectedCategory);
@@ -421,6 +436,9 @@ function SearchPage() {
           </div>
         </AnimateOnView>
       )}
+
+      {/* Recently Viewed */}
+      <RecentlyViewed />
     </div>
   );
 }
@@ -429,7 +447,9 @@ function SearchPage() {
 
 function ProductCard({ product }: { product: Product }) {
   const [imgLoaded, setImgLoaded] = useState(false);
+  const { formatPrice } = useCurrency();
   const { isInWishlist, toggleWishlist } = useWishlist();
+  const { openQuickView } = useQuickView();
   const isFav = isInWishlist(product.id);
 
   return (
@@ -456,7 +476,18 @@ function ProductCard({ product }: { product: Product }) {
           {product.category}
         </span>
 
-        <div className="absolute top-4 right-4 z-10 opacity-0 group-hover:opacity-100 transition-all duration-300">
+        <div className="absolute top-4 right-4 z-10 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-300">
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              openQuickView(product);
+            }}
+            className="w-9 h-9 rounded-full backdrop-blur-sm flex items-center justify-center transition-all duration-300 bg-white/80 hover:bg-white text-espresso-muted hover:text-espresso"
+            aria-label="Quick view"
+          >
+            <Eye size={14} strokeWidth={1.5} />
+          </button>
           <button
             onClick={(e) => {
               e.preventDefault();
@@ -498,7 +529,7 @@ function ProductCard({ product }: { product: Product }) {
           </p>
         </div>
         <span className="text-sm font-medium text-espresso tabular-nums shrink-0">
-          {product.priceLabel}
+          {formatPrice(product.price)}
         </span>
       </div>
     </Link>

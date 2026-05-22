@@ -1,10 +1,13 @@
 "use client";
 
-import { ArrowRight, ShoppingBag } from "lucide-react";
+import { ArrowRight, ShoppingBag, Eye } from "lucide-react";
 import Link from "next/link";
 import AnimateOnView from "../components/AnimateOnView";
-import { getProductsByCategory } from "../lib/products";
+import RecentlyViewed from "../components/RecentlyViewed";
+import { useProducts, getProductsByCategory } from "../lib/useProducts";
 import { useWishlist } from "../lib/WishlistContext";
+import { useQuickView } from "../lib/QuickViewContext";
+import { useCurrency } from "../lib/CurrencyContext";
 import type { Product } from "../lib/types";
 
 const categoryVisuals: Record<
@@ -62,7 +65,8 @@ const categoryVisuals: Record<
 const categoryOrder = ["Objects", "Textiles", "Dining", "Lighting", "Bags"];
 
 export default function CollectionsPage() {
-  const grouped = getProductsByCategory();
+  const { products } = useProducts();
+  const grouped = getProductsByCategory(products);
 
   return (
     <div>
@@ -223,6 +227,13 @@ export default function CollectionsPage() {
         );
       })}
 
+      {/* Recently Viewed */}
+      <div className="px-6 sm:px-12 lg:px-20 xl:px-28">
+        <div className="max-w-6xl mx-auto">
+          <RecentlyViewed />
+        </div>
+      </div>
+
       {/* ── Closing CTA ──────────────────────────── */}
       <section className="bg-cream py-24 sm:py-32 px-6 sm:px-12 lg:px-20 xl:px-28">
         <AnimateOnView delay={0} rootMargin="-80px">
@@ -260,6 +271,8 @@ export default function CollectionsPage() {
 
 function ProductCard({ product }: { product: Product }) {
   const { isInWishlist, toggleWishlist } = useWishlist();
+  const { openQuickView } = useQuickView();
+  const { formatPrice } = useCurrency();
   const isFav = isInWishlist(product.id);
 
   return (
@@ -275,8 +288,19 @@ function ProductCard({ product }: { product: Product }) {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-espresso/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
-        {/* Top-right wishlist + arrow */}
+        {/* Top-right actions */}
         <div className="absolute top-4 right-4 z-10 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300">
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              openQuickView(product);
+            }}
+            className="w-9 h-9 rounded-full backdrop-blur-sm flex items-center justify-center transition-all duration-300 bg-white/80 hover:bg-white text-espresso-muted hover:text-espresso"
+            aria-label="Quick view"
+          >
+            <Eye size={14} strokeWidth={1.5} />
+          </button>
           <button
             onClick={(e) => {
               e.preventDefault();
@@ -306,9 +330,6 @@ function ProductCard({ product }: { product: Product }) {
               />
             </svg>
           </button>
-          <div className="w-9 h-9 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center text-espresso">
-            <ArrowRight size={14} strokeWidth={2.5} />
-          </div>
         </div>
       </div>
       <div className="mt-4 flex items-start justify-between gap-4">
@@ -321,7 +342,7 @@ function ProductCard({ product }: { product: Product }) {
           </h3>
         </div>
         <span className="text-sm font-medium text-espresso tabular-nums shrink-0">
-          {product.priceLabel}
+          {formatPrice(product.price)}
         </span>
       </div>
     </Link>

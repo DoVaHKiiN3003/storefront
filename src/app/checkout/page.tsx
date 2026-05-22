@@ -19,11 +19,19 @@ import {
   Percent,
   AlertCircle,
   CheckCircle,
+  Loader2,
 } from "lucide-react";
+import { Elements, PaymentElement, useStripe, useElements, CardElement } from "@stripe/react-stripe-js";
+import { loadStripe } from "@stripe/stripe-js";
 import AnimateOnView from "../components/AnimateOnView";
+import { CheckoutSkeleton } from "../components/Skeleton";
 import { products } from "../lib/products";
 import { useCart } from "../lib/CartContext";
 import { useToast } from "../lib/ToastContext";
+import { useAnalytics } from "../lib/AnalyticsContext";
+import { useCurrency } from "../lib/CurrencyContext";
+
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "pk_test_mock");
 
 // ── Types ────────────────────────────────────────────────
 
@@ -73,6 +81,7 @@ interface PromoCode {
   type: "percent" | "fixed" | "freeshipping";
   value: number;
   label: string;
+  discount: number;
 }
 
 // ── Constants ────────────────────────────────────────────
@@ -107,11 +116,6 @@ const INITIAL_PAYMENT: PaymentForm = {
   cvv: "",
 };
 
-const VALID_PROMOS: PromoCode[] = [
-  { code: "WELCOME10", type: "percent", value: 10, label: "10% off your order" },
-  { code: "SAVE20", type: "fixed", value: 20, label: "$20 off your order" },
-  { code: "FREESHIP", type: "freeshipping", value: 0, label: "Free shipping" },
-];
 
 const STEPS: { key: Step; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
   { key: "shipping", label: "Shipping", icon: MapPin },
@@ -154,6 +158,13 @@ export default function CheckoutPage() {
   const router = useRouter();
   const { clearCart } = useCart();
   const { addToast } = useToast();
+  const { formatPrice } = useCurrency();
+  const {
+    trackBeginCheckout,
+    trackAddShippingInfo,
+    trackAddPaymentInfo,
+    trackPurchase,
+  } = useAnalytics();
   const [checkoutCart, setCheckoutCart] = useState<CheckoutCart | null>(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -171,6 +182,7 @@ export default function CheckoutPage() {
   const [promoInput, setPromoInput] = useState("");
   const [appliedPromo, setAppliedPromo] = useState<PromoCode | null>(null);
   const [promoError, setPromoError] = useState("");
+  const [promoLoading, setPromoLoading] = useState(false);
 
   // Same as shipping toggle
   const [sameAsShipping, setSameAsShipping] = useState(true);
@@ -193,6 +205,21 @@ export default function CheckoutPage() {
 
     setLoaded(true);
   }, []);
+
+  // Track begin_checkout once cart loads
+  useEffect(() => {
+    if (loaded && checkoutCart) {
+      const items = checkoutCart.items.map((i) => ({
+        id: i.id,
+        name: i.name,
+        price: i.price,
+        image: i.image,
+        quantity: i.quantity,
+        variant: i.variant,
+      }));
+      trackBeginCheckout(items, checkoutCart.subtotal);
+    }
+  }, [loaded, checkoutCart, trackBeginCheckout]);
 
   // ── Step navigation ─────────────────────────
 
@@ -248,27 +275,6 @@ export default function CheckoutPage() {
     return errs;
   }, [payment]);
 
-  // ── Promo logic ─────────────────────────────
-
-  const applyPromo = useCallback(() => {
-    setPromoError("");
-    const code = promoInput.trim().toUpperCase();
-    if (!code) return;
-    const found = VALID_PROMOS.find((p) => p.code === code);
-    if (found) {
-      setAppliedPromo(found);
-      setPromoInput("");
-      addToast(`${found.label} applied!`, "success");
-    } else {
-      setPromoError("Invalid promo code");
-    }
-  }, [promoInput, addToast]);
-
-  const removePromo = useCallback(() => {
-    setAppliedPromo(null);
-    setPromoError("");
-  }, []);
-
   // ── Pricing ─────────────────────────────────
 
   const subtotal = checkoutCart?.subtotal ?? 0;
@@ -277,11 +283,50 @@ export default function CheckoutPage() {
   const subtotalAfterDiscount = useMemo(() => {
     if (!appliedPromo) return subtotal;
     if (appliedPromo.type === "percent") return subtotal * (1 - appliedPromo.value / 100);
-    if (appliedPromo.type === "fixed") return Math.max(0, subtotal - appliedPromo.value);
+    if (appliedPromo.type === "fixed") return Math.max(0, subtotal - appliedPromo.discount);
     return subtotal;
   }, [subtotal, appliedPromo]);
   const tax = Math.round(subtotalAfterDiscount * 0.0875 * 100) / 100;
   const total = subtotalAfterDiscount + shippingCost + tax;
+
+  // ── Promo logic ─────────────────────────────
+
+  const applyPromo = useCallback(async () => {
+    setPromoError("");
+    const code = promoInput.trim().toUpperCase();
+    if (!code) return;
+    setPromoLoading(true);
+    try {
+      const res = await fetch("/api/coupons/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, subtotal: checkoutCart?.subtotal ?? 0 }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.valid) {
+        setPromoError(data.error || "Invalid promo code");
+        setPromoLoading(false);
+        return;
+      }
+      setAppliedPromo({
+        code: data.code,
+        type: data.type,
+        value: data.value,
+        label: data.label,
+        discount: data.discount,
+      });
+      setPromoInput("");
+      addToast(`${data.label} applied!`, "success");
+    } catch {
+      setPromoError("Could not validate promo code. Please try again.");
+    }
+    setPromoLoading(false);
+  }, [promoInput, subtotal, addToast]);
+
+  const removePromo = useCallback(() => {
+    setAppliedPromo(null);
+    setPromoError("");
+  }, []);
 
   // ── Step transitions ─────────────────────────
 
@@ -300,40 +345,108 @@ export default function CheckoutPage() {
       setPayment((prev) => ({ ...prev, cardName: `${shipping.firstName} ${shipping.lastName}` }));
     }
 
+    // Track shipping info step
+    trackAddShippingInfo(
+      subtotalAfterDiscount + shippingCost + tax,
+      appliedPromo?.code
+    );
+
     goToStep("payment", "forward");
-  }, [shipping, validateShipping, payment.cardName, goToStep]);
+  }, [shipping, validateShipping, payment.cardName, goToStep, trackAddShippingInfo, subtotalAfterDiscount, shippingCost, tax, appliedPromo]);
 
   const handlePaymentNext = useCallback(() => {
     const errs = validatePayment();
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
-    goToStep("review", "forward");
-  }, [validatePayment, goToStep]);
 
-  const handlePlaceOrder = useCallback(() => {
+    // Track payment info step
+    trackAddPaymentInfo(
+      subtotalAfterDiscount + shippingCost + tax,
+      appliedPromo?.code
+    );
+
+    goToStep("review", "forward");
+  }, [validatePayment, goToStep, trackAddPaymentInfo, subtotalAfterDiscount, shippingCost, tax, appliedPromo]);
+
+  const handlePlaceOrder = useCallback(async () => {
     if (!checkoutCart) return;
     setSubmitting(true);
+
+    const items = checkoutCart.items.map((i) => ({
+      id: i.id,
+      name: i.name,
+      price: i.price,
+      image: i.image,
+      quantity: i.quantity,
+      variant: i.variant,
+    }));
+
+    // Create order data
+    const orderData = {
+      items,
+      subtotal: subtotalAfterDiscount,
+      shipping: shippingCost,
+      tax,
+      total,
+      email: shipping.email,
+      shippingAddress: {
+        name: `${shipping.firstName} ${shipping.lastName}`,
+        line1: shipping.address1,
+        line2: shipping.address2 || "",
+        city: shipping.city,
+        state: shipping.state,
+        zip: shipping.zip,
+      },
+      couponCode: appliedPromo?.code ?? null,
+      discount: appliedPromo?.type !== "freeshipping" ? (subtotal - subtotalAfterDiscount) : 0,
+    };
+
+    try {
+      // Create payment intent
+      const piRes = await fetch("/api/create-payment-intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: total, currency: "usd" }),
+      });
+      const piData = await piRes.json();
+
+      // Save order to database
+      const orderRes = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...orderData,
+          paymentIntent: piData.paymentIntentId ?? null,
+        }),
+      });
+
+      if (!orderRes.ok) {
+        console.warn("Order saved with fallback — DB write failed");
+      }
+    } catch (err) {
+      console.warn("Could not save order to DB:", err);
+    }
 
     // Store final order data for confirmation page
     sessionStorage.setItem(
       "storefront-order",
       JSON.stringify({
-        items: checkoutCart.items,
-        subtotal: subtotalAfterDiscount,
-        shipping: shippingCost,
-        tax,
-        total,
+        ...orderData,
         timestamp: Date.now(),
-        shippingAddress: {
-          name: `${shipping.firstName} ${shipping.lastName}`,
-          line1: shipping.address1,
-          line2: shipping.address2 || "",
-          city: shipping.city,
-          state: shipping.state,
-          zip: shipping.zip,
-        },
-        email: shipping.email,
       })
+    );
+
+    // Generate order number for purchase event
+    const orderId = `ORD-${Date.now().toString(36).toUpperCase()}`;
+
+    // Track purchase
+    trackPurchase(
+      orderId,
+      total,
+      items,
+      appliedPromo?.code,
+      shippingCost,
+      tax
     );
 
     // Clean up checkout cart
@@ -344,7 +457,7 @@ export default function CheckoutPage() {
       clearCart();
       router.push("/confirmation");
     }, 800);
-  }, [checkoutCart, subtotalAfterDiscount, shippingCost, tax, total, shipping, clearCart, router]);
+  }, [checkoutCart, subtotalAfterDiscount, shippingCost, tax, total, shipping, clearCart, router, trackPurchase, appliedPromo, subtotal]);
 
   // ── Empty state ─────────────────────────────
 
@@ -370,11 +483,7 @@ export default function CheckoutPage() {
   }
 
   if (!loaded || !checkoutCart) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 rounded-full border-2 border-sage/30 border-t-sage animate-spin" />
-      </div>
-    );
+    return <CheckoutSkeleton />;
   }
 
   const stepIndex = STEPS.findIndex((s) => s.key === step);
@@ -489,6 +598,7 @@ export default function CheckoutPage() {
                   tax={tax}
                   total={total}
                   submitting={submitting}
+                  formatPrice={formatPrice}
                   onPlaceOrder={handlePlaceOrder}
                   onBack={() => goToStep("payment", "backward")}
                 />
@@ -516,34 +626,34 @@ export default function CheckoutPage() {
                         <div className="flex-1 min-w-0 flex flex-col justify-center">
                           <Link href={`/products/${products.find((p) => p.id === item.id)?.slug ?? "#"}`}
                             className="text-xs font-semibold text-espresso hover:text-espresso-muted transition-colors duration-300 truncate">{item.name}</Link>
-                          <span className="text-[11px] text-espresso-muted/60 mt-0.5 tabular-nums">${item.price.toFixed(2)}</span>
+                          <span className="text-[11px] text-espresso-muted/60 mt-0.5 tabular-nums">{formatPrice(item.price)}</span>
                         </div>
                         <span className="text-xs font-semibold text-espresso tabular-nums self-center">
-                          ${(item.price * item.quantity).toFixed(2)}
+                          {formatPrice(item.price * item.quantity)}
                         </span>
                       </div>
                     ))}
                   </div>
 
                   <div className="space-y-3 text-sm mb-6 pb-6 border-b border-espresso/5">
-                    <SummaryRow label="Subtotal" value={subtotal} />
+                    <SummaryRow label="Subtotal" value={subtotal} formatPrice={formatPrice} />
                     {appliedPromo && appliedPromo.type !== "freeshipping" && (
                       <div className="flex items-center justify-between text-sage">
                         <span className="text-xs flex items-center gap-1">
                           <Percent size={10} /> {appliedPromo.label}
                         </span>
                         <span className="text-xs font-medium tabular-nums">
-                          -${(subtotal - subtotalAfterDiscount).toFixed(2)}
+                          -{formatPrice(subtotal - subtotalAfterDiscount)}
                         </span>
                       </div>
                     )}
-                    <SummaryRow label="Shipping" value={shippingCost} />
-                    <SummaryRow label="Tax" value={tax} note="8.75%" />
+                    <SummaryRow label="Shipping" value={shippingCost} formatPrice={formatPrice} />
+                    <SummaryRow label="Tax" value={tax} note="8.75%" formatPrice={formatPrice} />
                   </div>
 
                   <div className="flex items-center justify-between mb-6">
                     <span className="text-sm font-semibold text-espresso">Total</span>
-                    <span className="text-xl font-semibold tracking-tight text-espresso tabular-nums">${total.toFixed(2)}</span>
+                    <span className="text-xl font-semibold tracking-tight text-espresso tabular-nums">{formatPrice(total)}</span>
                   </div>
 
                   {appliedPromo?.type === "freeshipping" && (
@@ -786,6 +896,7 @@ function ReviewStep({
   tax,
   total,
   submitting,
+  formatPrice,
   onPlaceOrder,
   onBack,
 }: {
@@ -804,6 +915,7 @@ function ReviewStep({
   tax: number;
   total: number;
   submitting: boolean;
+  formatPrice: (v: number) => string;
   onPlaceOrder: () => void;
   onBack: () => void;
 }) {
@@ -885,7 +997,7 @@ function ReviewStep({
                 value={promoInput}
                 onChange={(e) => { setPromoInput(e.target.value); }}
                 onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), applyPromo())}
-                placeholder="Enter code (WELCOME10, SAVE20, FREESHIP)"
+                placeholder="Enter promo code (e.g. WELCOME10)"
                 className="flex-1 px-4 py-2.5 text-sm bg-cream rounded-xl border border-espresso/10 text-espresso placeholder:text-espresso-muted/30 outline-none focus:border-espresso/30 focus:ring-2 focus:ring-espresso/5 transition-all duration-300 font-mono text-xs"
               />
               <button onClick={applyPromo}
@@ -908,28 +1020,27 @@ function ReviewStep({
       <AnimateOnView delay={200} rootMargin="-80px">
         <div className="rounded-[1.5rem] bg-white border border-espresso/5 p-6 sm:p-8">
           <div className="space-y-3 text-sm mb-6 pb-6 border-b border-espresso/5">
-            <SummaryRow label="Subtotal" value={subtotal} />
+            <SummaryRow label="Subtotal" value={subtotal} formatPrice={formatPrice} />
             {appliedPromo && appliedPromo.type !== "freeshipping" && (
               <div className="flex items-center justify-between text-sage">
                 <span className="text-xs flex items-center gap-1"><Percent size={10} /> {appliedPromo.label}</span>
-                <span className="text-xs font-medium tabular-nums">-${(subtotal - subtotalAfterDiscount).toFixed(2)}</span>
+                <span className="text-xs font-medium tabular-nums">-{formatPrice(subtotal - subtotalAfterDiscount)}</span>
               </div>
             )}
-            <SummaryRow label="Shipping" value={shippingCost} />
-            <SummaryRow label="Tax" value={tax} note="8.75%" />
+            <SummaryRow label="Shipping" value={shippingCost} formatPrice={formatPrice} />
+            <SummaryRow label="Tax" value={tax} note="8.75%" formatPrice={formatPrice} />
           </div>
 
           <div className="flex items-center justify-between mb-8">
             <span className="text-sm font-semibold text-espresso">Total</span>
-            <span className="text-xl font-semibold tracking-tight text-espresso tabular-nums">${total.toFixed(2)}</span>
+            <span className="text-xl font-semibold tracking-tight text-espresso tabular-nums">{formatPrice(total)}</span>
           </div>
 
           <button onClick={onPlaceOrder} disabled={submitting}
             className="group w-full rounded-full bg-espresso py-3.5 text-sm font-medium text-cream hover:bg-espresso-light active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] flex items-center justify-center gap-2">
             {submitting ? (
-              <><div className="w-4 h-4 rounded-full border-2 border-cream/30 border-t-cream animate-spin" /> Processing…</>
-            ) : (
-              <><Lock size={14} /> Place Order — ${total.toFixed(2)}</>
+              <><div className="w-4 h-4 rounded-full border-2 border-cream/30 border-t-cream animate-spin" /> Processing…</>             ) : (
+              <><Lock size={14} /> Place Order — {formatPrice(total)}</>
             )}
           </button>
 
@@ -951,7 +1062,7 @@ function ReviewStep({
 
 // ── Sub-components ────────────────────────────────────────
 
-function SummaryRow({ label, value, note }: { label: string; value: number; note?: string }) {
+function SummaryRow({ label, value, note, formatPrice }: { label: string; value: number; note?: string; formatPrice?: (v: number) => string }) {
   return (
     <div className="flex items-center justify-between">
       <span className="text-espresso-muted/70 flex items-center gap-1">
@@ -959,7 +1070,7 @@ function SummaryRow({ label, value, note }: { label: string; value: number; note
         {note && <span className="text-[10px] text-espresso-muted/40">({note})</span>}
       </span>
       <span className="font-medium text-espresso tabular-nums">
-        {value === 0 ? <span className="text-sage font-semibold">FREE</span> : `$${value.toFixed(2)}`}
+        {value === 0 ? <span className="text-sage font-semibold">FREE</span> : (formatPrice ? formatPrice(value) : `$${value.toFixed(2)}`)}
       </span>
     </div>
   );

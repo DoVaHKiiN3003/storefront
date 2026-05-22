@@ -1,27 +1,42 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Menu, X, ShoppingBag, Search, User, Sun, Moon, Heart } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { Menu, X, ShoppingBag, Search, User, Sun, Moon, Heart, LogIn, ChevronDown } from "lucide-react";
+import { useRouter, usePathname } from "next/navigation";
 import { useCart } from "../lib/CartContext";
 import { useWishlist } from "../lib/WishlistContext";
 import { useTheme } from "../lib/ThemeContext";
+import { useCurrency } from "../lib/CurrencyContext";
 
 const navLinks = [
   { label: "New Arrivals", href: "#" },
   { label: "Shop All", href: "#" },
-  { label: "Collections", href: "#" },
-  { label: "About", href: "/about" },
   { label: "Collections", href: "/collections" },
+  { label: "Blog", href: "/blog" },
+  { label: "About", href: "/about" },
 ];
 
 export default function Nav() {
   const [isOpen, setIsOpen] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
+  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
   const router = useRouter();
+  const pathname = usePathname();
   const { itemCount, setCartOpen } = useCart();
   const { count: wishlistCount } = useWishlist();
   const { theme, toggleTheme } = useTheme();
+  const { currencies, selectedCurrency, setCurrency } = useCurrency();
+  const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("storefront-session");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.user) setUser(parsed.user);
+      }
+    } catch {}
+  }, [pathname]);
 
   useEffect(() => {
     if (isOpen) {
@@ -104,9 +119,55 @@ export default function Nav() {
                 </span>
               )}
             </button>
-            <button className="hidden sm:flex items-center justify-center w-8 h-8 rounded-full text-espresso-muted hover:text-espresso hover:bg-espresso/5 transition-all duration-300">
-              <User size={16} />
-            </button>
+            {user ? (
+              <button
+                onClick={() => router.push("/account")}
+                className="hidden sm:flex items-center justify-center w-8 h-8 rounded-full text-espresso-muted hover:text-espresso hover:bg-espresso/5 transition-all duration-300"
+                aria-label="My account"
+              >
+                <User size={16} />
+              </button>
+            ) : (
+              <button
+                onClick={() => router.push("/login")}
+                className="hidden sm:flex items-center justify-center w-8 h-8 rounded-full text-espresso-muted hover:text-espresso hover:bg-espresso/5 transition-all duration-300"
+                aria-label="Sign in"
+              >
+                <LogIn size={16} />
+              </button>
+            )}
+            {/* Currency selector */}
+            <div className="relative hidden sm:block">
+              <button
+                onClick={() => setShowCurrencyPicker(!showCurrencyPicker)}
+                className="flex items-center gap-1 px-2 py-1.5 rounded-full text-[11px] font-semibold text-espresso-muted hover:text-espresso hover:bg-espresso/5 transition-all duration-300"
+                aria-label="Select currency"
+              >
+                {selectedCurrency.code}
+                <ChevronDown size={10} className={`transition-transform duration-300 ${showCurrencyPicker ? 'rotate-180' : ''}`} />
+              </button>
+              {showCurrencyPicker && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowCurrencyPicker(false)} />
+                  <div className="absolute right-0 top-full mt-2 z-20 w-36 rounded-2xl bg-white border border-espresso/10 shadow-[0_12px_40px_-8px_rgba(0,0,0,0.12)] p-2 overflow-y-auto max-h-60">
+                    {currencies.map((c) => (
+                      <button
+                        key={c.code}
+                        onClick={() => { setCurrency(c.code); setShowCurrencyPicker(false); }}
+                        className={`w-full text-left rounded-xl px-3 py-2 text-xs font-medium transition-all duration-300 flex items-center gap-2 ${
+                          selectedCurrency.code === c.code
+                            ? "bg-espresso/5 text-espresso"
+                            : "text-espresso-muted hover:bg-espresso/3 hover:text-espresso"
+                        }`}
+                      >
+                        <span className="w-6 text-center">{c.symbol}</span>
+                        <span>{c.code}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
             <button
               onClick={() => setCartOpen(true)}
               className="relative flex items-center justify-center w-8 h-8 rounded-full text-espresso-muted hover:text-espresso hover:bg-espresso/5 transition-all duration-300"
@@ -189,7 +250,10 @@ export default function Nav() {
               >
                 <Heart size={18} />
               </button>
-              <button className="p-3 rounded-full bg-espresso text-cream">
+              <button
+                onClick={() => router.push(user ? "/account" : "/login")}
+                className="p-3 rounded-full bg-espresso text-cream"
+              >
                 <User size={18} />
               </button>
             </div>

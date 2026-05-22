@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { Clock } from "lucide-react";
-import { products } from "../lib/products";
+import { useProducts } from "../lib/useProducts";
+import { useCurrency } from "../lib/CurrencyContext";
 import type { Product } from "../lib/types";
 
 const STORAGE_KEY = "storefront-recently-viewed";
@@ -38,6 +39,9 @@ function loadRecentSlugs(): string[] {
 export default function RecentlyViewed({ currentSlug }: { currentSlug?: string }) {
   const [recentProducts, setRecentProducts] = useState<Product[]>([]);
 
+  const { products } = useProducts();
+  const { formatPrice } = useCurrency();
+
   useEffect(() => {
     const slugs = loadRecentSlugs();
     const filtered = slugs.filter((s) => s !== currentSlug).slice(0, 4);
@@ -45,12 +49,12 @@ export default function RecentlyViewed({ currentSlug }: { currentSlug?: string }
       .map((slug) => products.find((p) => p.slug === slug))
       .filter((p): p is Product => !!p);
     setRecentProducts(resolved);
-  }, [currentSlug]);
+  }, [currentSlug, products]);
 
   if (recentProducts.length === 0) return null;
 
   return (
-    <section className="mt-20 sm:mt-28">
+    <section className="mt-20 sm:mt-28 px-6 sm:px-12 lg:px-20 xl:px-28">
       <div className="flex items-center gap-3 mb-6">
         <Clock size={14} className="text-espresso-muted/50" />
         <h2 className="text-xs uppercase tracking-[0.2em] font-semibold text-espresso">
@@ -81,7 +85,7 @@ export default function RecentlyViewed({ currentSlug }: { currentSlug?: string }
                 {product.name}
               </p>
               <p className="text-[11px] text-espresso-muted/60 font-medium mt-0.5">
-                {product.priceLabel}
+                {formatPrice(product.price)}
               </p>
             </div>
           </Link>
