@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
 
     const account = await prisma.customerAccount.findUnique({
       where: { sessionToken: token },
-      select: { id: true, email: true, name: true, createdAt: true },
+      select: { id: true, email: true, name: true, role: true, createdAt: true },
     });
 
     if (!account) {

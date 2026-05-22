@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import {
   Eye,
   ShoppingCart,
@@ -252,6 +253,8 @@ function KpiCard({
 // ── Main Dashboard Page ────────────────────────────────
 
 export default function AdminDashboard() {
+  const router = useRouter();
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [activeTab, setActiveTab] = useState<"overview" | "events" | "products" | "orders" | "inventory" | "reviews" | "blog" | "currencies">("overview");
@@ -303,6 +306,40 @@ export default function AdminDashboard() {
   }, [fetchOrders, fetchDbMetrics]);
 
   useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const stored = localStorage.getItem("storefront-session");
+        if (!stored) {
+          router.push("/login");
+          return;
+        }
+        const { token } = JSON.parse(stored);
+        if (!token) {
+          router.push("/login");
+          return;
+        }
+
+        const res = await fetch("/api/auth/session", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (!data.authenticated) {
+          router.push("/login");
+          return;
+        }
+        if (data.user?.role !== "admin") {
+          router.push("/");
+          return;
+        }
+        setCheckingAuth(false);
+      } catch {
+        router.push("/login");
+      }
+    };
+    checkAuth();
+  }, [router]);
+
+  useEffect(() => {
     refresh();
     fetchOrders();
     fetchDbMetrics();
@@ -322,6 +359,22 @@ export default function AdminDashboard() {
     analyticsStore.clear();
     refresh();
   };
+
+  if (checkingAuth) {
+    return (
+      <div className="pt-28 sm:pt-32 pb-24 px-6 sm:px-12 lg:px-20 xl:px-28 max-w-[1400px] mx-auto">
+        <div className="space-y-4 animate-pulse">
+          <div className="h-8 w-48 skeleton rounded-lg" />
+          <div className="h-4 w-72 skeleton rounded-lg" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-8">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-32 skeleton rounded-2xl" />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!metrics) {
     return (

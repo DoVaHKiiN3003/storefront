@@ -212,6 +212,7 @@ model CustomerAccount {
   email        String   @unique
   name         String
   password     String   // hashed
+  role         String   @default("customer")
   sessionToken String?  @unique
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

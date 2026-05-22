@@ -170,7 +170,7 @@ const seedProducts = [
 ];
 
 async function main() {
-  console.log("🌱 Seeding database...");
+  console.log("Seeding database...");
 
   for (const data of seedProducts) {
     const { variants, images, details, isFeatured, ...productData } = data;
@@ -215,7 +215,7 @@ async function main() {
       create: { productId: product.id },
     });
 
-    console.log(`  ✓ ${productData.name}`);
+    console.log(`  ${productData.name}`);
   }
 
   // Seed default settings
@@ -236,7 +236,7 @@ async function main() {
     });
   }
 
-  console.log(`  ✓ ${defaultSettings.length} default settings`);
+  console.log(`  ${defaultSettings.length} default settings`);
 
   // Seed sample CMS pages
   const cmsPages = [
@@ -297,7 +297,7 @@ async function main() {
     });
   }
 
-  console.log(`  ✓ ${cmsPages.length} CMS pages`);
+  console.log(`  ${cmsPages.length} CMS pages`);
 
   // Seed a sample coupon
   await prisma.coupon.upsert({
@@ -313,7 +313,7 @@ async function main() {
     },
   });
 
-  console.log("  ✓ 1 sample coupon (WELCOME10)");
+  console.log("  1 sample coupon (WELCOME10)");
 
   // Seed sample currencies
   const currencies = [
@@ -333,7 +333,7 @@ async function main() {
     });
   }
 
-  console.log(`  ✓ ${currencies.length} currencies`);
+  console.log(`  ${currencies.length} currencies`);
 
   // Seed sample blog posts
   const blogPosts = [
@@ -380,7 +380,7 @@ async function main() {
     });
   }
 
-  console.log(`  ✓ ${blogPosts.length} blog posts`);
+  console.log(`  ${blogPosts.length} blog posts`);
 
   // Seed sample reviews
   const products = await prisma.product.findMany({ take: 5 });
@@ -432,19 +432,19 @@ async function main() {
       await prisma.review.create({ data: review });
     }
 
-    console.log(`  ✓ ${sampleReviews.length} sample reviews`);
+    console.log(`  ${sampleReviews.length} sample reviews`);
   }
 
   // ── Seed Accounts ────────────────────────────────
 
-  // Create admin account (admin@store.com / admin123)
+  // Create admin account in CustomerAccount (admin@store.com / admin123)
   const adminSalt = crypto.randomBytes(16).toString("hex");
   const adminHash = crypto
     .createHash("sha256")
     .update("admin123" + adminSalt)
     .digest("hex");
 
-  await prisma.account.upsert({
+  await prisma.customerAccount.upsert({
     where: { email: "admin@store.com" },
     update: {
       name: "Admin",
@@ -459,7 +459,7 @@ async function main() {
     },
   });
 
-  console.log("  ✓ 1 admin account (admin@store.com / admin123)");
+  console.log("  1 admin account (admin@store.com / admin123)");
 
   // Create sample customer account (customer@store.com / customer123)
   const customerSalt = crypto.randomBytes(16).toString("hex");
@@ -473,22 +473,24 @@ async function main() {
     update: {
       name: "Test Customer",
       password: `${customerSalt}:${customerHash}`,
+      role: "customer",
     },
     create: {
       email: "customer@store.com",
       name: "Test Customer",
       password: `${customerSalt}:${customerHash}`,
+      role: "customer",
     },
   });
 
-  console.log("  ✓ 1 customer account (customer@store.com / customer123)");
+  console.log("  1 customer account (customer@store.com / customer123)");
 
-  console.log("✅ Seeding complete!");
+  console.log("Seeding complete!");
 }
 
 main()
   .catch((e) => {
-    console.error("❌ Seeding failed:", e);
+    console.error("Seeding failed:", e);
     process.exit(1);
   })
   .finally(async () => {
