@@ -4,6 +4,11 @@ import "./globals.css";
 import Nav from "./components/Nav";
 import CartDrawer from "./components/CartDrawer";
 import { CartProvider } from "./lib/CartContext";
+import { WishlistProvider } from "./lib/WishlistContext";
+import { ThemeProvider } from "./lib/ThemeContext";
+import { ReviewProvider } from "./lib/ReviewContext";
+import { ToastProvider } from "./lib/ToastContext";
+import ScrollToTop from "./components/ScrollToTop";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,12 +36,25 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable}`}
     >
+      <head>
+        <link rel="preconnect" href="https://picsum.photos" />
+        <link rel="dns-prefetch" href="https://picsum.photos" />
+      </head>
       <body className="font-sans antialiased bg-cream text-espresso">
-        <CartProvider>
-          <Nav />
-          <main>{children}</main>
-          <CartDrawer />
-        </CartProvider>
+        <ThemeProvider>
+          <WishlistProvider>
+            <ReviewProvider>
+              <CartProvider>
+                <ToastProvider>
+                  <Nav />
+                  <main>{children}</main>
+                  <CartDrawer />
+                  <ScrollToTop />
+                </ToastProvider>
+              </CartProvider>
+            </ReviewProvider>
+          </WishlistProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

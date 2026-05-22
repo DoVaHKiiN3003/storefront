@@ -1,12 +1,21 @@
 "use client";
 
 import { useEffect } from "react";
-import { X, Minus, Plus, Trash2, ShoppingBag } from "lucide-react";
+import { X, Minus, Plus, Trash2, ShoppingBag, ArrowRight } from "lucide-react";
 import { useCart } from "../lib/CartContext";
+import { useRouter } from "next/navigation";
 
 export default function CartDrawer() {
-  const { items, itemCount, subtotal, cartOpen, setCartOpen, updateQuantity, removeItem } =
-    useCart();
+  const {
+    items,
+    itemCount,
+    subtotal,
+    cartOpen,
+    setCartOpen,
+    updateQuantity,
+    removeItem,
+  } = useCart();
+  const router = useRouter();
   // Lock body scroll when open
   useEffect(() => {
     if (cartOpen) {
@@ -168,8 +177,24 @@ export default function CartDrawer() {
             <p className="text-[11px] text-espresso-muted/50">
               Shipping and taxes calculated at checkout.
             </p>
-            <button className="w-full rounded-full bg-espresso py-3.5 text-sm font-medium text-cream hover:bg-espresso-light active:scale-[0.98] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]">
-              Checkout — ${subtotal.toFixed(2)}
+            <button
+              onClick={() => {
+                // Store cart items for checkout page
+                sessionStorage.setItem(
+                  "storefront-checkout-cart",
+                  JSON.stringify({
+                    items,
+                    subtotal,
+                    timestamp: Date.now(),
+                  })
+                );
+                setCartOpen(false);
+                router.push("/checkout");
+              }}
+              className="group w-full rounded-full bg-espresso py-3.5 text-sm font-medium text-cream hover:bg-espresso-light active:scale-[0.98] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] flex items-center justify-center gap-2"
+            >
+              Checkout
+              <ArrowRight size={14} className="transition-transform duration-300 group-hover:translate-x-0.5" />
             </button>
             <button
               onClick={() => setCartOpen(false)}

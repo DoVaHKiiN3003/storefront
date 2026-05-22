@@ -1,21 +1,27 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Menu, X, ShoppingBag, Search, User } from "lucide-react";
+import { Menu, X, ShoppingBag, Search, User, Sun, Moon, Heart } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCart } from "../lib/CartContext";
+import { useWishlist } from "../lib/WishlistContext";
+import { useTheme } from "../lib/ThemeContext";
 
 const navLinks = [
   { label: "New Arrivals", href: "#" },
   { label: "Shop All", href: "#" },
   { label: "Collections", href: "#" },
-  { label: "About", href: "#" },
-  { label: "Journal", href: "#" },
+  { label: "About", href: "/about" },
+  { label: "Collections", href: "/collections" },
 ];
 
 export default function Nav() {
   const [isOpen, setIsOpen] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
+  const router = useRouter();
   const { itemCount, setCartOpen } = useCart();
+  const { count: wishlistCount } = useWishlist();
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     if (isOpen) {
@@ -54,8 +60,49 @@ export default function Nav() {
 
           {/* Actions */}
           <div className="flex items-center gap-2">
-            <button className="hidden sm:flex items-center justify-center w-8 h-8 rounded-full text-espresso-muted hover:text-espresso hover:bg-espresso/5 transition-all duration-300">
+            {/* Theme toggle */}
+            <button
+              onClick={toggleTheme}
+              className="hidden sm:flex items-center justify-center w-8 h-8 rounded-full text-espresso-muted hover:text-espresso hover:bg-espresso/5 transition-all duration-300"
+              aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+            >
+              <span className="relative w-4 h-4">
+                <Sun
+                  size={16}
+                  className={`absolute inset-0 transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+                    theme === "light"
+                      ? "opacity-100 rotate-0 scale-100"
+                      : "opacity-0 rotate-90 scale-75"
+                  }`}
+                />
+                <Moon
+                  size={16}
+                  className={`absolute inset-0 transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+                    theme === "dark"
+                      ? "opacity-100 rotate-0 scale-100"
+                      : "opacity-0 -rotate-90 scale-75"
+                  }`}
+                />
+              </span>
+            </button>
+            <button
+              onClick={() => router.push("/search")}
+              className="hidden sm:flex items-center justify-center w-8 h-8 rounded-full text-espresso-muted hover:text-espresso hover:bg-espresso/5 transition-all duration-300"
+              aria-label="Search products"
+            >
               <Search size={16} />
+            </button>
+            <button
+              onClick={() => router.push("/wishlist")}
+              className="hidden sm:flex relative items-center justify-center w-8 h-8 rounded-full text-espresso-muted hover:text-espresso hover:bg-espresso/5 transition-all duration-300"
+              aria-label={`Wishlist, ${wishlistCount} items`}
+            >
+              <Heart size={16} strokeWidth={2} />
+              {wishlistCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-red-400 text-white text-[8px] font-bold flex items-center justify-center">
+                  {wishlistCount > 9 ? "9+" : wishlistCount}
+                </span>
+              )}
             </button>
             <button className="hidden sm:flex items-center justify-center w-8 h-8 rounded-full text-espresso-muted hover:text-espresso hover:bg-espresso/5 transition-all duration-300">
               <User size={16} />
@@ -121,8 +168,26 @@ export default function Nav() {
                 opacity: isOpen ? 1 : 0,
               }}
             >
-              <button className="p-3 rounded-full bg-espresso text-cream">
+              <button
+                onClick={toggleTheme}
+                className="p-3 rounded-full bg-espresso text-cream"
+                aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+              >
+                {theme === "light" ? <Moon size={18} /> : <Sun size={18} />}
+              </button>
+              <button
+                onClick={() => router.push("/search")}
+                className="p-3 rounded-full bg-espresso text-cream"
+                aria-label="Search products"
+              >
                 <Search size={18} />
+              </button>
+              <button
+                onClick={() => router.push("/wishlist")}
+                className="p-3 rounded-full bg-espresso text-cream"
+                aria-label="Wishlist"
+              >
+                <Heart size={18} />
               </button>
               <button className="p-3 rounded-full bg-espresso text-cream">
                 <User size={18} />

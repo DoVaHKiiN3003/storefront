@@ -16,6 +16,10 @@
 }
 
 /* Noise texture overlay */
+.dark body::after {
+  opacity: 0.04;
+}
+
 body::after {
   content: "";
   position: fixed;
@@ -31,6 +35,28 @@ body::after {
 /* Smooth scroll */
 html {
   scroll-behavior: smooth;
+}
+
+/* Dark mode color overrides */
+html.dark {
+  --color-cream: #1a1a1a;
+  --color-espresso: #f0ece4;
+  --color-espresso-light: #e0d8cc;
+  --color-espresso-muted: #9a8e84;
+  --color-sage: #7a8a7a;
+  --color-sage-light: #8a9a8a;
+  --color-charcoal: #f0ece4;
+  --color-warm-white: #222222;
+}
+
+/* Theme transition */
+html,
+html *,
+html *::before,
+html *::after {
+  transition-property: background-color, border-color, box-shadow, color, fill, stroke;
+  transition-duration: 0.4s;
+  transition-timing-function: ease;
 }
 
 /* Hide scrollbar utility */
@@ -72,4 +98,17 @@ html {
 @keyframes overlayFadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+/* Heart bounce animation */
+@keyframes heartBounce {
+  0% { transform: scale(1); }
+  25% { transform: scale(1.35); }
+  50% { transform: scale(0.9); }
+  75% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+.animate-heart-bounce {
+  animation: heartBounce 0.5s cubic-bezier(0.32, 0.72, 0, 1);
 }
