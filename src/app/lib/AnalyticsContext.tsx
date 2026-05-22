@@ -58,7 +58,7 @@ const AnalyticsContext = createContext<AnalyticsContextValue | null>(null);
 
 function useGtagScript() {
   useEffect(() => {
-    const measurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
+    const measurementId = (process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? "").trim();
 
     if (!measurementId || typeof window === "undefined") return;
 
@@ -102,7 +102,7 @@ function PageViewTracker() {
     // Store locally for admin dashboard
     analyticsStore.trackPageView(url, document.title);
 
-    const measurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
+    const measurementId = (process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? "").trim();
     if (!measurementId) return;
 
     try {
@@ -133,7 +133,7 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
     analyticsStore.trackEvent(event.name, (event.params ?? {}) as Record<string, unknown>);
 
     if (typeof window === "undefined") return;
-    const measurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
+    const measurementId = (process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? "").trim();
     if (!measurementId) return;
 
     try {
