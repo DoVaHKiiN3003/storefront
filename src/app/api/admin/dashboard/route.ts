@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
       prisma.$queryRawUnsafe<Array<{ day: string; count: number; revenue: number }>>(
         `SELECT DATE(created_at) as day, COUNT(*) as count, COALESCE(SUM(total), 0) as revenue
          FROM "Order"
-         WHERE created_at >= datetime('now', '-7 days')
+         WHERE created_at >= NOW() - INTERVAL '7 days'
          GROUP BY DATE(created_at)
          ORDER BY day ASC`
       ),
