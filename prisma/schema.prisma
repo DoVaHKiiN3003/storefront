@@ -1,0 +1,279 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ── Products ──────────────────────────────────────────
+
+model Product {
+  id          Int              @id @default(autoincrement())
+  slug        String           @unique
+  name        String
+  price       Float
+  priceLabel  String
+  category    String
+  image       String
+  images      String           // JSON array of image URLs
+  description String
+  details     String           // JSON array of detail strings
+  materials   String
+  dimensions  String
+  origin      String
+  stock       Int              @default(100)
+  isFeatured  Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  variants      ProductVariant[]
+  productStats  ProductAnalytics?
+  orderItems    OrderItem[]
+  cartItems     CartItem[]
+  reviews       Review[]
+}
+
+model ProductVariant {
+  id         Int     @id @default(autoincrement())
+  label      String
+  type       String  // "size" or "color"
+  priceDelta Float   @default(0)
+  color      String? // hex color for swatches
+  stock      Int     @default(100)
+  productId  Int
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, label])
+}
+
+// ── Cart (ephemeral — for reference / analytics) ─────
+
+model CartItem {
+  id          Int     @id @default(autoincrement())
+  productId   Int
+  name        String
+  price       Float
+  image       String
+  quantity    Int     @default(1)
+  variant     String?
+  sessionId   String
+  createdAt   DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id])
+}
+
+// ── Orders ────────────────────────────────────────────
+
+model Order {
+  id            Int      @id @default(autoincrement())
+  email         String
+  subtotal      Float
+  shipping      Float    @default(0)
+  tax           Float    @default(0)
+  total         Float
+  status        String   @default("pending") // pending, confirmed, shipped, delivered, cancelled
+  couponCode    String?
+  discount      Float    @default(0)
+
+  // Shipping address
+  shipName      String
+  shipLine1     String
+  shipLine2     String  @default("")
+  shipCity      String
+  shipState     String
+  shipZip       String
+
+  // Payment (stripe ID in production)
+  paymentIntent String?
+  customerId    Int?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  customer      Customer?         @relation(fields: [customerId], references: [id])
+  customerAcc   CustomerAccount?  @relation(fields: [customerAccountId], references: [id])
+  customerAccountId Int?
+  items         OrderItem[]
+}
+
+model OrderItem {
+  id        Int     @id @default(autoincrement())
+  orderId   Int
+  productId Int
+  name      String
+  price     Float
+  image     String
+  quantity  Int
+  variant   String?
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+}
+
+// ── Customers ─────────────────────────────────────────
+
+model Customer {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders  Order[]
+}
+
+// ── Coupons ───────────────────────────────────────────
+
+model Coupon {
+  id              Int      @id @default(autoincrement())
+  code            String   @unique
+  type            String   // "percentage" or "fixed"
+  value           Float
+  minOrderAmount  Float    @default(0)
+  maxUses         Int      @default(0)  // 0 = unlimited
+  usedCount       Int      @default(0)
+  isActive        Boolean  @default(true)
+  expiresAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ── Analytics ─────────────────────────────────────────
+
+model AnalyticsEvent {
+  id        Int      @id @default(autoincrement())
+  name      String
+  params    String   @default("{}") // JSON blob
+  path      String
+  sessionId String
+  timestamp DateTime @default(now())
+}
+
+model PageView {
+  id        Int      @id @default(autoincrement())
+  path      String
+  title     String
+  sessionId String
+  timestamp DateTime @default(now())
+}
+
+model ProductAnalytics {
+  id            Int   @id @default(autoincrement())
+  productId     Int   @unique
+  views         Int   @default(0)
+  addToCarts    Int   @default(0)
+  wishlistAdds  Int   @default(0)
+  purchases     Int   @default(0)
+  revenue       Float @default(0)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+// ── Admin Settings (key-value store) ─────────────────
+
+model Setting {
+  key        String   @id
+  value      String
+  updatedAt  DateTime @updatedAt
+}
+
+// ── CMS Pages ─────────────────────────────────────────
+
+model CmsPage {
+  id          Int      @id @default(autoincrement())
+  slug        String   @unique
+  title       String
+  content     String   // Rich text / HTML
+  type        String   @default("page") // "hero", "banner", "about", "faq", "page"
+  isPublished Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ── Admin Accounts ────────────────────────────────────
+
+model Account {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  name      String
+  password  String   // hashed
+  role      String   @default("admin") // "admin", "editor"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ── Customer Accounts ───────────────────────────────
+
+model CustomerAccount {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  name         String
+  password     String   // hashed
+  sessionToken String?  @unique
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  orders       Order[]
+  reviews      Review[]
+}
+
+// ── Reviews (DB-backed) ─────────────────────────────
+
+model Review {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  customerId Int?
+  name      String
+  email     String?
+  rating    Int      // 1–5
+  title     String
+  comment   String
+  status    String   @default("pending") // "pending", "approved", "rejected"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customer CustomerAccount? @relation(fields: [customerId], references: [id])
+}
+
+// ── Blog / News ─────────────────────────────────────
+
+model BlogPost {
+  id          Int      @id @default(autoincrement())
+  slug        String   @unique
+  title       String
+  excerpt     String
+  content     String   // Rich text / HTML
+  coverImage  String   @default("")
+  author      String   @default("STORE")
+  tags        String   @default("[]") // JSON array
+  isPublished Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ── Image Uploads ──────────────────────────────────
+
+model UploadedFile {
+  id        Int      @id @default(autoincrement())
+  filename  String
+  url       String
+  mimeType  String
+  size      Int
+  createdAt DateTime @default(now())
+}
+
+// ── Multi-Currency ─────────────────────────────────
+
+model CurrencyRate {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique
+  name      String
+  symbol    String
+  rateToUSD Float    // e.g. 0.92 for EUR, 1.0 for USD
+  updatedAt DateTime @updatedAt
+}

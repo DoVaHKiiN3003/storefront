@@ -87,6 +87,8 @@ export default function Hero() {
                 src="https://picsum.photos/seed/hero-essentials/1200/1600"
                 alt="Premium lifestyle collection"
                 className="w-full h-full object-cover"
+                loading="eager"
+                fetchPriority="high"
               />
             </div>
           </div>
@@ -109,6 +111,7 @@ export default function Hero() {
                       src={`https://picsum.photos/seed/avatar-${i}/100/100`}
                       alt=""
                       className="w-full h-full object-cover"
+                      loading="lazy"
                     />
                   </div>
                 ))}

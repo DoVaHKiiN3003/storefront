@@ -1,12 +1,23 @@
 "use client";
 
 import { useEffect } from "react";
-import { X, Minus, Plus, Trash2, ShoppingBag } from "lucide-react";
+import { X, Minus, Plus, Trash2, ShoppingBag, ArrowRight } from "lucide-react";
 import { useCart } from "../lib/CartContext";
+import { useCurrency } from "../lib/CurrencyContext";
+import { useRouter } from "next/navigation";
 
 export default function CartDrawer() {
-  const { items, itemCount, subtotal, cartOpen, setCartOpen, updateQuantity, removeItem } =
-    useCart();
+  const {
+    items,
+    itemCount,
+    subtotal,
+    cartOpen,
+    setCartOpen,
+    updateQuantity,
+    removeItem,
+  } = useCart();
+  const { formatPrice } = useCurrency();
+  const router = useRouter();
   // Lock body scroll when open
   useEffect(() => {
     if (cartOpen) {
@@ -112,7 +123,7 @@ export default function CartDrawer() {
                         {item.name}
                       </h4>
                       <p className="text-xs text-espresso-muted/70 mt-0.5">
-                        ${item.price.toFixed(2)}
+                        {formatPrice(item.price)}
                       </p>
                     </div>
                     <button
@@ -147,7 +158,7 @@ export default function CartDrawer() {
                       <Plus size={12} className="text-espresso" />
                     </button>
                     <span className="ml-auto text-sm font-semibold text-espresso tabular-nums">
-                      ${(item.price * item.quantity).toFixed(2)}
+                      {formatPrice(item.price * item.quantity)}
                     </span>
                   </div>
                 </div>
@@ -162,14 +173,30 @@ export default function CartDrawer() {
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-espresso-muted">Subtotal</span>
               <span className="text-lg font-semibold tracking-tight text-espresso tabular-nums">
-                ${subtotal.toFixed(2)}
+                {formatPrice(subtotal)}
               </span>
             </div>
             <p className="text-[11px] text-espresso-muted/50">
               Shipping and taxes calculated at checkout.
             </p>
-            <button className="w-full rounded-full bg-espresso py-3.5 text-sm font-medium text-cream hover:bg-espresso-light active:scale-[0.98] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]">
-              Checkout — ${subtotal.toFixed(2)}
+            <button
+              onClick={() => {
+                // Store cart items for checkout page
+                sessionStorage.setItem(
+                  "storefront-checkout-cart",
+                  JSON.stringify({
+                    items,
+                    subtotal,
+                    timestamp: Date.now(),
+                  })
+                );
+                setCartOpen(false);
+                router.push("/checkout");
+              }}
+              className="group w-full rounded-full bg-espresso py-3.5 text-sm font-medium text-cream hover:bg-espresso-light active:scale-[0.98] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] flex items-center justify-center gap-2"
+            >
+              Checkout
+              <ArrowRight size={14} className="transition-transform duration-300 group-hover:translate-x-0.5" />
             </button>
             <button
               onClick={() => setCartOpen(false)}

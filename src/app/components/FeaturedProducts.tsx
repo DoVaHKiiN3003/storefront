@@ -1,11 +1,14 @@
 "use client";
 
 import { useRef } from "react";
-import { ArrowRight, Plus, Check } from "lucide-react";
+import { ArrowRight, Plus, Check, Eye } from "lucide-react";
 import Link from "next/link";
 import AnimateOnView, { useOnView } from "./AnimateOnView";
 import { useCart } from "../lib/CartContext";
-import { products } from "../lib/products";
+import { useWishlist } from "../lib/WishlistContext";
+import { useQuickView } from "../lib/QuickViewContext";
+import { useProducts } from "../lib/useProducts";
+import { useCurrency } from "../lib/CurrencyContext";
 import type { Product } from "../lib/types";
 
 const productSpans: Record<number, string> = {
@@ -17,6 +20,8 @@ const productSpans: Record<number, string> = {
 };
 
 export default function FeaturedProducts() {
+  const { products } = useProducts();
+  const { formatPrice } = useCurrency();
   const headerRef = useRef<HTMLDivElement>(null);
   const headerVisible = useOnView(headerRef, "-100px");
 
@@ -71,8 +76,10 @@ export default function FeaturedProducts() {
               />
               <div className="absolute inset-0 bg-gradient-to-t from-espresso/60 via-espresso/5 to-transparent" />
 
-              {/* Add to Cart button */}
-              <div className="absolute top-4 right-4 z-10 opacity-0 group-hover:opacity-100 transition-all duration-300">
+              {/* Top-right actions */}
+              <div className="absolute top-4 right-4 z-10 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                <QuickViewButton product={product} />
+                <WishlistOverlayIcon productId={product.id} />
                 <AddToCartButton product={product} />
               </div>
 
@@ -86,7 +93,7 @@ export default function FeaturedProducts() {
                     {product.name}
                   </h3>
                   <span className="text-sm font-medium text-cream/80">
-                    {product.priceLabel}
+                    {formatPrice(product.price)}
                   </span>
                 </div>
               </div>
@@ -95,6 +102,62 @@ export default function FeaturedProducts() {
         ))}
       </div>
     </section>
+  );
+}
+function WishlistOverlayIcon({ productId }: { productId: number }) {
+  const { isInWishlist, toggleWishlist } = useWishlist();
+  const isFav = isInWishlist(productId);
+
+  return (
+    <button
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleWishlist(productId);
+      }}
+      className={`w-9 h-9 rounded-full backdrop-blur-sm flex items-center justify-center transition-all duration-300 ${
+        isFav
+          ? "bg-red-50/90 text-red-400"
+          : "bg-white/80 hover:bg-white text-espresso-muted hover:text-espresso"
+      }`}
+      aria-label={isFav ? "Remove from wishlist" : "Add to wishlist"}
+    >
+      <span key={String(isFav)} className={`flex items-center justify-center ${isFav ? "animate-heart-bounce" : ""}`}>
+        <svg
+          width={14}
+          height={14}
+          viewBox="0 0 24 24"
+          fill={isFav ? "currentColor" : "none"}
+          stroke="currentColor"
+          strokeWidth={isFav ? 0 : 2}
+          className="transition-all duration-300"
+        >
+          <path
+            d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </span>
+    </button>
+  );
+}
+
+function QuickViewButton({ product }: { product: Product }) {
+  const { openQuickView } = useQuickView();
+
+  return (
+    <button
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openQuickView(product);
+      }}
+      className="w-9 h-9 rounded-full backdrop-blur-sm flex items-center justify-center transition-all duration-300 bg-white/80 hover:bg-white text-espresso-muted hover:text-espresso"
+      aria-label="Quick view"
+    >
+      <Eye size={14} strokeWidth={1.5} />
+    </button>
   );
 }
 

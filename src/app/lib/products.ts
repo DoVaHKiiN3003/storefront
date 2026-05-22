@@ -24,6 +24,10 @@ export const products: Product[] = [
       "Approx. 10\" × 6\" × 6\"",
       "Due to handmade nature, slight variations may occur",
     ],
+    variants: [
+      { label: "Standard", type: "size", priceDelta: 0 },
+      { label: "Large", type: "size", priceDelta: 60 },
+    ],
     materials: "High-fire stoneware clay, celadon glaze",
     dimensions: "10\" H × 6\" W × 6\" D",
     origin: "Handcrafted in Brooklyn, NY",
@@ -50,6 +54,11 @@ export const products: Product[] = [
       "Hidden magnetic closure",
       "Reinforced cross-stitched handles",
       "Garment-washed for softness",
+    ],
+    variants: [
+      { label: "Natural", type: "color", priceDelta: 0, color: "#e8dccc" },
+      { label: "Charcoal", type: "color", priceDelta: 0, color: "#4a4a4a" },
+      { label: "Olive", type: "color", priceDelta: 10, color: "#7a8a6a" },
     ],
     materials: "100% European linen, vegetable-tanned leather trim",
     dimensions: "16\" W × 14\" H × 5\" D (10\" strap drop)",
@@ -78,6 +87,11 @@ export const products: Product[] = [
       "Dishwasher and microwave safe",
       "Stackable design for compact storage",
     ],
+    variants: [
+      { label: "Oatmeal", type: "color", priceDelta: 0, color: "#eaddcf" },
+      { label: "Slate", type: "color", priceDelta: 0, color: "#7a7a7a" },
+      { label: "Terracotta", type: "color", priceDelta: 15, color: "#c07050" },
+    ],
     materials: "Speckled stoneware clay, food-safe glaze",
     dimensions: "Plate: 10.5\" D, Bowl: 6\" D × 3\" H, Mug: 12 oz",
     origin: "Handcrafted in Portland, OR",
@@ -104,6 +118,11 @@ export const products: Product[] = [
       "Hand-fringed edges",
       "Ethically produced in a family-run mill",
       "Dry clean recommended",
+    ],
+    variants: [
+      { label: "Charcoal Herringbone", type: "color", priceDelta: 0, color: "#3a3a3a" },
+      { label: "Cream Houndstooth", type: "color", priceDelta: 0, color: "#f0e8dc" },
+      { label: "Navy Tartan", type: "color", priceDelta: 20, color: "#2a3a5a" },
     ],
     materials: "100% merino wool, non-itch treatment",
     dimensions: "55\" W × 72\" H",
@@ -133,6 +152,11 @@ export const products: Product[] = [
       "Recommended: 60W LED warm white",
       "Weighted base with felt bottom",
     ],
+    variants: [
+      { label: "Satin Brass", type: "color", priceDelta: 0, color: "#c8a84e" },
+      { label: "Matte Black", type: "color", priceDelta: 20, color: "#1a1a1a" },
+      { label: "Polished Nickel", type: "color", priceDelta: 40, color: "#b8b8b8" },
+    ],
     materials: "Solid brass, steel base, cotton-covered cord (8 ft)",
     dimensions: "22\" H × 12\" shade diameter × 6\" base diameter",
     origin: "Assembled in Chicago, IL",
@@ -149,4 +173,17 @@ export function getRelatedProducts(slug: string, limit = 3): Product[] {
   return products
     .filter((p) => p.slug !== slug && p.category === current.category)
     .slice(0, limit);
+}
+
+export function getProductsByCategory(): Map<string, Product[]> {
+  const grouped = new Map<string, Product[]>();
+  for (const product of products) {
+    const existing = grouped.get(product.category);
+    if (existing) {
+      existing.push(product);
+    } else {
+      grouped.set(product.category, [product]);
+    }
+  }
+  return grouped;
 }

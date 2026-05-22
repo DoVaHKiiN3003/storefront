@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import type { CartItem, Product } from "./types";
+import { useAnalytics } from "./AnalyticsContext";
 
 // ── State & Actions ──────────────────────────────────────
 
@@ -17,22 +18,36 @@ interface CartState {
   items: CartItem[];
 }
 
+// Composite key for variant-unique cart items
+function itemKey(id: number, variant?: string): string {
+  return variant ? `${id}-${variant}` : `${id}`;
+}
+
 type CartAction =
-  | { type: "ADD_ITEM"; payload: { product: Product; quantity?: number } }
-  | { type: "REMOVE_ITEM"; payload: { id: number } }
-  | { type: "UPDATE_QUANTITY"; payload: { id: number; quantity: number } }
+  | {
+      type: "ADD_ITEM";
+      payload: { product: Product; quantity?: number; variant?: string; price?: number };
+    }
+  | { type: "REMOVE_ITEM"; payload: { id: number; variant?: string } }
+  | {
+      type: "UPDATE_QUANTITY";
+      payload: { id: number; variant?: string; quantity: number };
+    }
   | { type: "CLEAR" }
   | { type: "HYDRATE"; payload: CartItem[] };
 
 function cartReducer(state: CartState, action: CartAction): CartState {
   switch (action.type) {
     case "ADD_ITEM": {
-      const { product, quantity = 1 } = action.payload;
-      const existing = state.items.find((item) => item.id === product.id);
+      const { product, quantity = 1, variant, price } = action.payload;
+      const key = itemKey(product.id, variant);
+      const existing = state.items.find(
+        (item) => itemKey(item.id, item.variant) === key
+      );
       if (existing) {
         return {
           items: state.items.map((item) =>
-            item.id === product.id
+            itemKey(item.id, item.variant) === key
               ? { ...item, quantity: Math.min(item.quantity + quantity, 99) }
               : item
           ),
@@ -44,25 +59,38 @@ function cartReducer(state: CartState, action: CartAction): CartState {
           {
             id: product.id,
             name: product.name,
-            price: product.price,
+            price: price ?? product.price,
             image: product.image,
             quantity: Math.min(quantity, 99),
+            variant,
           },
         ],
       };
     }
-    case "REMOVE_ITEM":
+    case "REMOVE_ITEM": {
+      const { id, variant } = action.payload;
+      const key = itemKey(id, variant);
       return {
-        items: state.items.filter((item) => item.id !== action.payload.id),
+        items: state.items.filter(
+          (item) => itemKey(item.id, item.variant) !== key
+        ),
       };
+    }
     case "UPDATE_QUANTITY": {
-      const { id, quantity } = action.payload;
+      const { id, variant, quantity } = action.payload;
+      const key = itemKey(id, variant);
       if (quantity <= 0) {
-        return { items: state.items.filter((item) => item.id !== id) };
+        return {
+          items: state.items.filter(
+            (item) => itemKey(item.id, item.variant) !== key
+          ),
+        };
       }
       return {
         items: state.items.map((item) =>
-          item.id === id ? { ...item, quantity: Math.min(quantity, 99) } : item
+          itemKey(item.id, item.variant) === key
+            ? { ...item, quantity: Math.min(quantity, 99) }
+            : item
         ),
       };
     }
@@ -81,9 +109,9 @@ interface CartContextValue {
   items: CartItem[];
   itemCount: number;
   subtotal: number;
-  addItem: (product: Product, quantity?: number) => void;
-  removeItem: (id: number) => void;
-  updateQuantity: (id: number, quantity: number) => void;
+  addItem: (product: Product, quantity?: number, variant?: string, price?: number) => void;
+  removeItem: (id: number, variant?: string) => void;
+  updateQuantity: (id: number, quantity: number, variant?: string) => void;
   clearCart: () => void;
   cartOpen: boolean;
   setCartOpen: (open: boolean) => void;
@@ -127,17 +155,36 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, [state.items, hydrated]);
 
-  const addItem = useCallback((product: Product, quantity = 1) => {
-    dispatch({ type: "ADD_ITEM", payload: { product, quantity } });
-  }, []);
+  const { trackAddToCart, trackRemoveFromCart } = useAnalytics();
 
-  const removeItem = useCallback((id: number) => {
-    dispatch({ type: "REMOVE_ITEM", payload: { id } });
-  }, []);
+  const addItem = useCallback(
+    (product: Product, quantity = 1, variant?: string, price?: number) => {
+      dispatch({
+        type: "ADD_ITEM",
+        payload: { product, quantity, variant, price },
+      });
+      trackAddToCart(product, quantity, variant, price);
+    },
+    [trackAddToCart]
+  );
 
-  const updateQuantity = useCallback((id: number, quantity: number) => {
-    dispatch({ type: "UPDATE_QUANTITY", payload: { id, quantity } });
-  }, []);
+  const removeItem = useCallback((id: number, variant?: string) => {
+    // Find item before removing so we have its data for analytics
+    const item = state.items.find(
+      (i) => (variant ? `${i.id}-${i.variant}` : `${i.id}`) === (variant ? `${id}-${variant}` : `${id}`)
+    );
+    dispatch({ type: "REMOVE_ITEM", payload: { id, variant } });
+    if (item) {
+      trackRemoveFromCart(item);
+    }
+  }, [state.items, trackRemoveFromCart]);
+
+  const updateQuantity = useCallback(
+    (id: number, quantity: number, variant?: string) => {
+      dispatch({ type: "UPDATE_QUANTITY", payload: { id, variant, quantity } });
+    },
+    []
+  );
 
   const clearCart = useCallback(() => {
     dispatch({ type: "CLEAR" });
