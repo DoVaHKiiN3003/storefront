@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import crypto from "crypto";
 
 const connectionString = process.env.DATABASE_URL!;
 const adapter = new PrismaPg({ connectionString });
@@ -433,6 +434,54 @@ async function main() {
 
     console.log(`  ✓ ${sampleReviews.length} sample reviews`);
   }
+
+  // ── Seed Accounts ────────────────────────────────
+
+  // Create admin account (admin@store.com / admin123)
+  const adminSalt = crypto.randomBytes(16).toString("hex");
+  const adminHash = crypto
+    .createHash("sha256")
+    .update("admin123" + adminSalt)
+    .digest("hex");
+
+  await prisma.account.upsert({
+    where: { email: "admin@store.com" },
+    update: {
+      name: "Admin",
+      password: `${adminSalt}:${adminHash}`,
+      role: "admin",
+    },
+    create: {
+      email: "admin@store.com",
+      name: "Admin",
+      password: `${adminSalt}:${adminHash}`,
+      role: "admin",
+    },
+  });
+
+  console.log("  ✓ 1 admin account (admin@store.com / admin123)");
+
+  // Create sample customer account (customer@store.com / customer123)
+  const customerSalt = crypto.randomBytes(16).toString("hex");
+  const customerHash = crypto
+    .createHash("sha256")
+    .update("customer123" + customerSalt)
+    .digest("hex");
+
+  await prisma.customerAccount.upsert({
+    where: { email: "customer@store.com" },
+    update: {
+      name: "Test Customer",
+      password: `${customerSalt}:${customerHash}`,
+    },
+    create: {
+      email: "customer@store.com",
+      name: "Test Customer",
+      password: `${customerSalt}:${customerHash}`,
+    },
+  });
+
+  console.log("  ✓ 1 customer account (customer@store.com / customer123)");
 
   console.log("✅ Seeding complete!");
 }
