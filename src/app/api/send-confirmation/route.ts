@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { render } from "@react-email/render";
 import ConfirmationEmail from "../../../emails/ConfirmationEmail";
 import type { OrderData } from "../../lib/types";
 
@@ -43,11 +44,15 @@ export async function POST(request: Request) {
     const from =
       process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
 
+    const emailHtml = await render(
+      ConfirmationEmail({ order, orderNumber })
+    );
+
     const { data, error } = await resend.emails.send({
       from: `Storefront <${from}>`,
       to: [recipientEmail],
       subject: `Order Confirmed — #${orderNumber}`,
-      react: ConfirmationEmail({ order, orderNumber }),
+      html: emailHtml,
     });
 
     if (error) {
